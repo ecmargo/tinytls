@@ -59,7 +59,7 @@ where
     // there are as many frequencies as elements in the haystack
     debug_assert_eq!(h_vec.len(), m_u64.len());
     // all needles are in the haystack
-    assert!(f_vec.iter().all(|x| t_vec.contains(x)));
+    debug_assert!(f_vec.iter().all(|x| t_vec.contains(x)));
     // Send (Q,Y)
     merlin.add_points(&[Q, Y]).unwrap();
 
