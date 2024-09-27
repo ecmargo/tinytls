@@ -1,3 +1,7 @@
+use std::result;
+
+use hex_literal::hex;
+
 // Another implementation of AES for playing with zkps
 pub const SBOX: [u8; 256] = [
     0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -321,7 +325,7 @@ impl AesGCMCipher {
         let mut blocks: Vec<AesGCMCipherBlock> = Vec::new(); 
         for i in 0..n_blocks {
             let mut ctr_i = icb.clone();
-            ctr_i.count = ctr_i.count + 1; 
+            ctr_i.count = ctr_i.count + 1 + (i as u32); 
             let block_i = AesGCMCipherBlock::new(key, ctr_i, Self::pt_slice(plain_text, i));
             blocks.push(block_i);
         }
@@ -631,17 +635,37 @@ fn test_aes128_wiring() {
     assert_eq!(start0, witness.start[..16]);
 }
 
-use hex_literal::hex;
+
 #[test]
 fn test_aes128_gcm_single_block(){
     let plain_text: [u8;16] = hex!("001d0c231287c1182784554ca3a21908");
     let key: [u8; 16] = hex!("5b9604fe14eadba931b0ccf34843dab9");
     let iv: [u8; 12] = hex!("028318abc1824029138141a2"); 
-    let exppected: [u8;16] = hex!("26073cc1d851beff176384dc9896d5ff"); 
+    let expected: [u8;16] = hex!("26073cc1d851beff176384dc9896d5ff"); 
     let mut ctr = AesGCMCounter::create_icb(iv); 
     ctr.count = ctr.count+1;
     let block = AesGCMCipherBlock::new(key, ctr, plain_text);
    
-    assert_eq!(block.final_xor, exppected);
+    assert_eq!(block.final_xor, expected);
 
+}
+
+
+#[test]
+fn test_aes128_gcm_full(){
+    let plain_text: &[u8] = &hex!("d902deeab175c008329a33bfaccd5c0eb3a6a152a1510e7db04fa0aff7ce4288530db6a80fa7fea582aa7d46d7d56e708d2bb0c5edd3d26648d336c3620ea55e");
+    let key: [u8; 16] = hex!("e12260fcd355a51a0d01bb1f6fa538c2");
+    let iv: [u8; 12] = hex!("5dfc37366f5688275147d3f9"); 
+    let expected: &[u8] = &hex!("d33bf6722fc29384fad75f990248b9528e0959aa67ec66869dc3996c67a2d559e7d77ce5955f8cad2a4df5fdc3acccafa7bc0def53d848111256903e5add0420"); 
+    let out = AesGCMCipher::new(key, iv, plain_text); 
+
+    let check = expected.to_vec(); 
+
+    let mut result: Vec<u8> = Vec::new();
+
+    for block in out.blocks { 
+        result.extend_from_slice(&(block.final_xor));
+    }
+   
+    assert_eq!(result, check);
 }
