@@ -257,6 +257,52 @@ pub struct AesCipherTrace {
     pub _aux_m_col: [Vec<u8>; 4],
 }
 
+pub struct AesGCMCounter {
+    pub iv: [u8; 12], 
+    pub count: u32
+}
+
+pub struct AesGCMCipherBlock { 
+    pub plaintext: [u8;16],
+    pub counter: AesGCMCounter,
+    pub cipher_trace: AesCipherTrace, 
+    pub final_xor: [u8; 16]
+}
+
+pub struct AesGCMCipher(Vec<AesGCMCipherBlock>); 
+
+impl AesGCMCipherBlock { 
+    pub fn new(key: [u8;16], ctr: AesGCMCounter, plain_text: [u8;16]) -> Self { 
+        let cb = ctr.make_counter();
+        let cipher_trace = AesCipherTrace::new_aes128(cb, key);
+
+        let xor = xor(cipher_trace.output, plain_text); 
+
+        Self{
+            plaintext: plain_text, 
+            counter: ctr, 
+            cipher_trace: cipher_trace, 
+            final_xor: xor
+        }
+    }
+}
+
+impl AesGCMCounter {
+    //Assumign len(iv) is 96, will deal with hashing later
+    pub fn create_icb(iv: [u8; 12]) -> Self {
+        Self{
+            iv: iv, 
+            count: 1
+        }
+    }
+
+    pub fn make_counter(&self) -> [u8;16] {
+        let mut iter = self.iv.into_iter().chain(self.count.to_be_bytes());
+        let out = std::array::from_fn(|_| iter.next().unwrap()); 
+        out
+    }
+}
+
 impl AesCipherTrace {
     pub fn add_round(&mut self, round_trace: &RoundTrace) {
         self._s_row.extend(&round_trace._s_row);
@@ -554,4 +600,19 @@ fn test_aes128_wiring() {
     let round_keys = aes128_keyschedule(&key);
     let start0 = xor(message, round_keys[0]);
     assert_eq!(start0, witness.start[..16]);
+}
+
+use hex_literal::hex;
+#[test]
+fn test_aes128_gcm_single_block(){
+    let plain_text: [u8;16] = hex!("001d0c231287c1182784554ca3a21908");
+    let key: [u8; 16] = hex!("5b9604fe14eadba931b0ccf34843dab9");
+    let iv: [u8; 12] = hex!("028318abc1824029138141a2"); 
+    let exppected: [u8;16] = hex!("26073cc1d851beff176384dc9896d5ff"); 
+    let mut ctr = AesGCMCounter::create_icb(iv); 
+    ctr.count = ctr.count+1;
+    let witness = AesGCMCipherBlock::new(key, ctr, plain_text);
+   
+    assert_eq!(witness.final_xor, exppected);
+
 }
