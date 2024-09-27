@@ -257,6 +257,7 @@ pub struct AesCipherTrace {
     pub _aux_m_col: [Vec<u8>; 4],
 }
 
+#[derive(Default, Clone, Copy)]
 pub struct AesGCMCounter {
     pub iv: [u8; 12], 
     pub count: u32
@@ -269,7 +270,10 @@ pub struct AesGCMCipherBlock {
     pub final_xor: [u8; 16]
 }
 
-pub struct AesGCMCipher(Vec<AesGCMCipherBlock>); 
+pub struct AesGCMCipher{
+    pub icb: [u8;16],
+    pub blocks: Vec<AesGCMCipherBlock>
+} 
 
 impl AesGCMCipherBlock { 
     pub fn new(key: [u8;16], ctr: AesGCMCounter, plain_text: [u8;16]) -> Self { 
@@ -300,6 +304,31 @@ impl AesGCMCounter {
         let mut iter = self.iv.into_iter().chain(self.count.to_be_bytes());
         let out = std::array::from_fn(|_| iter.next().unwrap()); 
         out
+    }
+}
+
+impl AesGCMCipher {
+    pub fn pt_slice(pt: &[u8], index: usize) -> [u8; 16] {
+        assert!((index+1)*16 <= pt.len());
+        pt[16*index..16*(index+1)].try_into().expect("slice with incorrect length")
+    }
+
+    pub fn new(key: [u8; 16], iv: [u8; 12], plain_text: &[u8]) -> Self {
+        let icb = AesGCMCounter::create_icb(iv);
+        //for right now just assert plain_text is divisible by 16
+        assert!(plain_text.len() % 16 == 0);
+        let n_blocks = plain_text.len() / 16; 
+        let mut blocks: Vec<AesGCMCipherBlock> = Vec::new(); 
+        for i in 0..n_blocks {
+            let mut ctr_i = icb.clone();
+            ctr_i.count = ctr_i.count + 1; 
+            let block_i = AesGCMCipherBlock::new(key, ctr_i, Self::pt_slice(plain_text, i));
+            blocks.push(block_i);
+        }
+        Self {
+            icb: aes128(icb.make_counter(), key), 
+            blocks: blocks,
+        }
     }
 }
 
@@ -611,8 +640,8 @@ fn test_aes128_gcm_single_block(){
     let exppected: [u8;16] = hex!("26073cc1d851beff176384dc9896d5ff"); 
     let mut ctr = AesGCMCounter::create_icb(iv); 
     ctr.count = ctr.count+1;
-    let witness = AesGCMCipherBlock::new(key, ctr, plain_text);
+    let block = AesGCMCipherBlock::new(key, ctr, plain_text);
    
-    assert_eq!(witness.final_xor, exppected);
+    assert_eq!(block.final_xor, exppected);
 
 }
