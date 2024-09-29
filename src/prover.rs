@@ -36,7 +36,8 @@ pub struct AesGCMCipherBlockWitness<F: Field, const R: usize, const N: usize> {
 
 pub struct AesGCMCipherWitness<F: Field, const R: usize, const N: usize> {
     icb_witness: AesCipherWitness<F, R, N>, 
-    block_witnesses: Vec<AesGCMCipherBlockWitness<F, R, N>>
+    block_witnesses: Vec<AesGCMCipherBlockWitness<F, R, N>>,
+    full_witness_vec: Vec<u8>
 }
 
 pub struct AesKeySchWitness<F: Field, const R: usize, const N: usize> {
@@ -408,7 +409,7 @@ impl <F:Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F,R,N> {
 /// +--------------+
 /// ```
     pub(crate) fn vectorize_witness(witness: &aes::AesGCMCipherBlockTrace)->Vec<u8> {
-        let mut w: Vec<u8> = AesCipherWitness::vectorize_witness(&witness.aes_cipher_trace);
+        let mut w: Vec<u8> = AesCipherWitness::<F,R,N>::vectorize_witness(&witness.aes_cipher_trace);
         //assert final xor stat = w.len(); 
         let final_xor: Vec<u8> = witness.final_xor.iter().flat_map(|x: &u8|  [x & 0xf, x >> 4]).collect();
         w.extend(final_xor);
@@ -482,29 +483,50 @@ impl <F:Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F,R,N> {
 }
 
 // impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockWitness<F, R, N> {
-//     // fn witness_vec(&self) -> &[u8] {
-//     // }
+//     fn witness_vec(&self) -> &[u8] {
+//         self.witness_vec.as_slice()
+//     }
 
-//     // fn needles_len(&self) -> usize {
-//     // }
+//     fn needles_len(&self) -> usize {
+//     }
 
-//     // fn full_witness_opening(&self) -> F {
-//     // }
+//     fn full_witness_opening(&self) -> F {
+//         self.counter_opening+self.key_opening+self.plain_text_opening
+//     }
 
-//     // fn compute_needles_and_frequencies(
-//     //     &self,
-//     //     [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
-//     // ) -> (Vec<F>, Vec<F>, Vec<u8>) {
-//     // }
+//     fn compute_needles_and_frequencies(
+//         &self,
+//         [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
+//     ) -> (Vec<F>, Vec<F>, Vec<u8>) {
+//     }
 
-//     // fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
-//     // }
+//     fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
+//     }
 
-//     // fn full_witness(&self) -> Vec<F> {
-//     // }
+//     fn full_witness(&self) -> Vec<F> {
+//     }
 
 // }
 
+impl <F:Field, const R: usize, const N: usize> AesGCMCipherWitness<F,R,N> {
+    pub fn new(iv: [u8; 12], key: [u8; 16], plain_text: &[u8], icb_opening: F, counter_openings: Vec<F>, plain_text_openings: Vec<F>, key_opening:F)->Self {
+        let traces = AesGCMCipherTrace::new(key, iv, plain_text);
+        let icb = AesGCMCounter::create_icb(iv);
+        let icb_witness = AesCipherWitness::new(icb.make_counter(), &key, icb_opening, key_opening);
+
+        
+
+        Self {
+             icb_witness: icb_witness, 
+             block_witnesses: (), 
+             full_witness_vec: vectorize_witness(&icb_witness, ) 
+        }
+    }
+
+    pub(crate) fn vectorize_witness(icb_witness: &AesCipherWitness<F, R, N>, block_witnesses: Vec<AesGCMCipherBlockWitness<F,R,N>>) -> Vec<u8>{
+
+    }
+}
 
 pub fn aes_prove<'a, G: CurveGroup, LP: LinProof<G>, const R: usize>(
     merlin: &'a mut Merlin,

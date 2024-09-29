@@ -311,7 +311,7 @@ impl AesGCMCounter {
     }
 }
 
-impl AesGCMCipherTrace {
+impl AesGCMCipherxTrace {
     pub fn pt_slice(pt: &[u8], index: usize) -> [u8; 16] {
         assert!((index+1)*16 <= pt.len());
         pt[16*index..16*(index+1)].try_into().expect("slice with incorrect length")
