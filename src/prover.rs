@@ -8,7 +8,7 @@ use nimue::plugins::ark::*;
 use nimue::ProofResult;
 
 use super::{aes, constrain, linalg, lookup, pedersen, sigma, sumcheck};
-use crate::aes::{AesCipherTrace, AesKeySchTrace};
+use crate::aes::{AesCipherTrace, AesKeySchTrace, AesGCMCipherBlockTrace, AesGCMCounter, AesGCMCipherTrace};
 use crate::pedersen::CommitmentKey;
 use crate::registry::{aes_keysch_offsets, aes_offsets};
 use crate::traits::{LinProof, Witness};
@@ -20,6 +20,23 @@ pub struct AesCipherWitness<F: Field, const R: usize, const N: usize> {
     round_keys: [[u8; 16]; R],
     message_opening: F,
     key_opening: F,
+}
+
+pub struct AesGCMCipherBlockWitness<F: Field, const R: usize, const N: usize> {
+    trace: AesGCMCipherBlockTrace, 
+    witness_vec: Vec<u8>, 
+    counter: [u8; 16], 
+    round_keys: [[u8;16]; R], 
+    counter_opening: F, 
+    key_opening: F, 
+    plain_text: [u8; 16],
+    //might not actually need this
+    plain_text_opening: F
+}
+
+pub struct AesGCMCipherWitness<F: Field, const R: usize, const N: usize> {
+    icb_witness: AesCipherWitness<F, R, N>, 
+    block_witnesses: Vec<AesGCMCipherBlockWitness<F, R, N>>
 }
 
 pub struct AesKeySchWitness<F: Field, const R: usize, const N: usize> {
@@ -351,6 +368,143 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesCipherWitness<F
             .collect()
     }
 }
+
+impl <F:Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F,R,N> {
+    pub fn new(counter: AesGCMCounter, key: &[u8], plain_text: [u8; 16], counter_opening: F, key_opening: F, plain_text_opening: F) -> Self {
+        assert_eq!(key.len(), N*4); 
+        let round_keys = aes::keyschedule::<R, N>(key);
+        let trace = AesGCMCipherBlockTrace::new(key.try_into().expect("invalid keylenght"), counter, plain_text);
+        let witness_vec = Self::vectorize_witness(&trace);
+        Self {
+            trace: trace, 
+            witness_vec: witness_vec, 
+            counter: counter.make_counter(), 
+            round_keys: round_keys,
+            counter_opening:  counter_opening, 
+            key_opening: key_opening, 
+            plain_text: plain_text, 
+            plain_text_opening: plain_text_opening
+        }
+    }
+
+
+/// The witness is structured as follows:
+///
+/// ```text
+/// +--------------+
+/// |  .start      |
+/// +--------------+
+/// |  .sbox       |
+/// ---------------+
+/// |  .m_col      |
+/// +--------------+
+/// |  .final xor  |  
+/// +--------------+
+/// |  .round_keys |  <-- from outside
+/// +--------------+
+/// |  .counter    |  <-- from outside
+/// +--------------+
+/// |  .plain text |  <-- from outside
+/// +--------------+
+/// ```
+    pub(crate) fn vectorize_witness(witness: &aes::AesGCMCipherBlockTrace)->Vec<u8> {
+        let mut w: Vec<u8> = AesCipherWitness::vectorize_witness(&witness.aes_cipher_trace);
+        //assert final xor stat = w.len(); 
+        let final_xor: Vec<u8> = witness.final_xor.iter().flat_map(|x: &u8|  [x & 0xf, x >> 4]).collect();
+        w.extend(final_xor);
+        w
+    }
+
+    //This is not the optimal way to do this,too much repeated code :(
+    fn get_xor_witness(&self) -> Vec<(u8, u8, u8)> { 
+        let aes_trace = &self.trace.aes_cipher_trace; 
+    
+        let mut witness_xor = Vec::new();
+        // m_col_xor
+        for i in 0..4 {
+            let xs = aes_trace.m_col[i].iter().copied();
+            let ys = aes_trace._aux_m_col[i].iter().copied();
+            let zs = aes_trace.m_col[i + 1].iter().copied();
+            let new_witness = xs.zip(ys).zip(zs).map(|((x, y), z)| (x, y, z));
+            witness_xor.extend(new_witness)
+        }
+        // round key xor
+        {
+            let xs = aes_trace.m_col[4].iter().copied();
+            let zs = aes_trace.start.iter().skip(16).copied();
+            let ys = aes_trace._keys.iter().flatten().skip(16).copied();
+            // ys are the round keys
+            let new_witness = xs.zip(ys).zip(zs).map(|((x, y), z)| (x, y, z));
+            witness_xor.extend(new_witness)
+        }
+        // last round
+        {
+            let xs = aes_trace.s_box
+                .iter()
+                .skip(aes_trace.s_box.len() - 16)
+                .copied();
+            let ys = aes_trace._keys.last().into_iter().flatten().copied();
+            let zs = aes_trace.output.iter().copied();
+            let new_witness = xs.zip(ys).zip(zs).map(|((x, y), z)| (x, y, z));
+            witness_xor.extend(new_witness);
+        }
+        // first round xor
+        {
+            let xs = aes_trace.message.iter().copied();
+            // let ys = witness._keys.iter().take(16).flatten().copied();
+            let zs = aes_trace.start.iter().take(16).copied();
+            // ys is the 0th round key
+            let new_witness = xs.zip(zs).map(|(x, z)| (x, x ^ z, z));
+            witness_xor.extend(new_witness);
+        }
+        //Plaintext XOR 
+        {
+            let xs = aes_trace.output.iter().copied(); 
+            let ys = self.trace.plaintext.iter().copied();
+            let zs = self.trace.final_xor.iter().copied(); 
+            let new_witness = xs.zip(ys).zip(zs).map(|((x, y), z)| (x, y, z));
+            witness_xor.extend(new_witness);
+        }
+        witness_xor
+    }
+
+    fn get_s_box_witness(&self) -> Vec<(u8, u8)> {
+        let s_box = self.trace.aes_cipher_trace._s_row.iter().zip(&self.trace.aes_cipher_trace.s_box);
+        // let k_sch_s_box = witness._k_rot.iter().zip(&witness.k_sch_s_box);
+        s_box.map(|(&x, &y)| (x, y)).collect()
+    }
+
+    fn get_r2j_witness(&self) -> Vec<(u8, u8)> {
+        let xs = self.trace.aes_cipher_trace.s_box.iter().copied();
+        let ys = self.trace.aes_cipher_trace.m_col[0].iter().copied();
+        xs.zip(ys).collect()
+    }
+}
+
+// impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockWitness<F, R, N> {
+//     // fn witness_vec(&self) -> &[u8] {
+//     // }
+
+//     // fn needles_len(&self) -> usize {
+//     // }
+
+//     // fn full_witness_opening(&self) -> F {
+//     // }
+
+//     // fn compute_needles_and_frequencies(
+//     //     &self,
+//     //     [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
+//     // ) -> (Vec<F>, Vec<F>, Vec<u8>) {
+//     // }
+
+//     // fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
+//     // }
+
+//     // fn full_witness(&self) -> Vec<F> {
+//     // }
+
+// }
+
 
 pub fn aes_prove<'a, G: CurveGroup, LP: LinProof<G>, const R: usize>(
     merlin: &'a mut Merlin,

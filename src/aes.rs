@@ -267,19 +267,19 @@ pub struct AesGCMCounter {
     pub count: u32
 }
 
-pub struct AesGCMCipherBlock { 
+pub struct AesGCMCipherBlockTrace { 
     pub plaintext: [u8;16],
     pub counter: AesGCMCounter,
-    pub cipher_trace: AesCipherTrace, 
+    pub aes_cipher_trace: AesCipherTrace, 
     pub final_xor: [u8; 16]
 }
 
-pub struct AesGCMCipher{
+pub struct AesGCMCipherTrace{
     pub icb: [u8;16],
-    pub blocks: Vec<AesGCMCipherBlock>
+    pub blocks: Vec<AesGCMCipherBlockTrace>
 } 
 
-impl AesGCMCipherBlock { 
+impl AesGCMCipherBlockTrace { 
     pub fn new(key: [u8;16], ctr: AesGCMCounter, plain_text: [u8;16]) -> Self { 
         let cb = ctr.make_counter();
         let cipher_trace = AesCipherTrace::new_aes128(cb, key);
@@ -289,7 +289,7 @@ impl AesGCMCipherBlock {
         Self{
             plaintext: plain_text, 
             counter: ctr, 
-            cipher_trace: cipher_trace, 
+            aes_cipher_trace: cipher_trace, 
             final_xor: xor
         }
     }
@@ -311,7 +311,7 @@ impl AesGCMCounter {
     }
 }
 
-impl AesGCMCipher {
+impl AesGCMCipherTrace {
     pub fn pt_slice(pt: &[u8], index: usize) -> [u8; 16] {
         assert!((index+1)*16 <= pt.len());
         pt[16*index..16*(index+1)].try_into().expect("slice with incorrect length")
@@ -322,11 +322,11 @@ impl AesGCMCipher {
         //for right now just assert plain_text is divisible by 16
         assert!(plain_text.len() % 16 == 0);
         let n_blocks = plain_text.len() / 16; 
-        let mut blocks: Vec<AesGCMCipherBlock> = Vec::new(); 
+        let mut blocks: Vec<AesGCMCipherBlockTrace> = Vec::new(); 
         for i in 0..n_blocks {
             let mut ctr_i = icb.clone();
             ctr_i.count = ctr_i.count + 1 + (i as u32); 
-            let block_i = AesGCMCipherBlock::new(key, ctr_i, Self::pt_slice(plain_text, i));
+            let block_i = AesGCMCipherBlockTrace::new(key, ctr_i, Self::pt_slice(plain_text, i));
             blocks.push(block_i);
         }
         Self {
@@ -368,7 +368,6 @@ pub(crate) fn aes_trace<const R: usize>(
     round_keys: &[[u8; 16]; R],
 ) -> AesCipherTrace {
     let mut witness = AesCipherTrace::default();
-
     witness.message = message;
     witness.key = round_keys[0];
     witness._keys = round_keys.to_vec();
@@ -644,7 +643,7 @@ fn test_aes128_gcm_single_block(){
     let expected: [u8;16] = hex!("26073cc1d851beff176384dc9896d5ff"); 
     let mut ctr = AesGCMCounter::create_icb(iv); 
     ctr.count = ctr.count+1;
-    let block = AesGCMCipherBlock::new(key, ctr, plain_text);
+    let block = AesGCMCipherBlockTrace::new(key, ctr, plain_text);
    
     assert_eq!(block.final_xor, expected);
 
@@ -657,7 +656,7 @@ fn test_aes128_gcm_full(){
     let key: [u8; 16] = hex!("e12260fcd355a51a0d01bb1f6fa538c2");
     let iv: [u8; 12] = hex!("5dfc37366f5688275147d3f9"); 
     let expected: &[u8] = &hex!("d33bf6722fc29384fad75f990248b9528e0959aa67ec66869dc3996c67a2d559e7d77ce5955f8cad2a4df5fdc3acccafa7bc0def53d848111256903e5add0420"); 
-    let out = AesGCMCipher::new(key, iv, plain_text); 
+    let out = AesGCMCipherTrace::new(key, iv, plain_text); 
 
     let check = expected.to_vec(); 
 
