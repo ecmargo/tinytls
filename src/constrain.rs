@@ -36,6 +36,16 @@ pub fn aes_keysch_trace_to_needles<F: Field, const R: usize, const N: usize>(
     (dst, constant_term)
 }
 
+// pub fn aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
+//     aes_output: &[u8; 16],
+//     src: &[F],
+//     [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
+// ) -> (Vec<F>, F) {
+//src is powers of the evaluation point that we want to do that is transformed to convert a query from the needles vector to one 
+
+// }
+
+
 pub fn cipher_sbox<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
     let s_row = aes::shiftrows(identity);

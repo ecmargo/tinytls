@@ -2,6 +2,14 @@
 
 /// Basic AES implementation.
 pub mod aes;
+/// Common AES functionalities.
+pub mod aes_utils;
+/// Basic AES implementation (key schedule).
+pub mod aes_ks;
+/// Basic AES implementation.
+pub mod aes_plain;
+/// Basic AES GCM implementation.
+pub mod aes_gcm;
 /// AES keyschedule and cipher constraints.
 mod constrain;
 /// Interface functions publicly exposed.

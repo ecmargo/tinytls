@@ -39,11 +39,12 @@ pub fn commit_hiding<G: CurveGroup>(
     };
     (C, blinder)
 }
-
+//Modify the msm and update
 pub fn commit_u8<G: CurveGroup>(ck: &CommitmentKey<G>, u8scalars: &[u8]) -> G {
     u8msm::u8msm(&ck.vec_G, u8scalars)
 }
 
+//modify the msm and update
 pub fn commit_hiding_u8<G: CurveGroup>(
     csrng: &mut (impl RngCore + CryptoRng),
     ck: &CommitmentKey<G>,

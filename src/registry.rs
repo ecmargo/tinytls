@@ -9,6 +9,23 @@ pub(super) struct AesWitnessRegions {
     pub needles_len: usize,
 }
 
+pub(super) struct AesGCMBlockWitnessRegions {
+    pub start: usize,
+    pub s_box: usize,
+    pub m_col: [usize; 5],
+    pub final_xor: usize,
+    pub counter: usize,
+    pub plain_text: usize,
+    pub witness_len: usize,
+    pub needles_len: usize,
+}
+
+pub(super) struct AesGCMCipherWitnessRegions {
+    pub icb: usize,
+    pub round_keys: usize,
+    pub blocks: usize
+}
+
 pub(super) struct AesKeySchWitnessRegions {
     pub s_box: usize,
     pub xor: usize,
@@ -62,6 +79,78 @@ pub(super) const fn aes_keysch_offsets<const R: usize, const N: usize>() -> AesK
 /// - `.message` and `.round_keys`
 ///  denote message and round keys, respectively. They are given as part of the statement.
 pub(super) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
+    let start = 0;
+    let s_box = start + 16 * (R - 1);
+    // thank Rust for const for loops
+    let m_col_offset = s_box + 16 * (R - 1);
+    let m_col_len = 16 * (R - 2);
+    #[allow(clippy::all)]
+    let m_col = [
+        m_col_offset + m_col_len * 0,
+        m_col_offset + m_col_len * 1,
+        m_col_offset + m_col_len * 2,
+        m_col_offset + m_col_len * 3,
+        m_col_offset + m_col_len * 4,
+    ];
+    // let addroundkey_len = 16 * 11;
+    let message = m_col[4] + m_col_len;
+    let round_keys = message + 16;
+    let needles_len =
+            16 * (R-1) + // s_box
+            16 * (R-2) + // rj2
+            16 * (R-2) * 5 * 2 + // m_col xor's
+            16 * 2 * 2 // addroundkey first and last
+        ;
+
+    AesWitnessRegions {
+        start,
+        s_box,
+        m_col,
+        message,
+        round_keys,
+        witness_len: round_keys + 16 * R,
+        needles_len,
+    }
+}
+
+/// The witness is structured as follows:
+///
+/// ```text
+/// +--------------+
+/// |  .start      |
+/// +--------------+
+/// |  .sbox       |
+/// ---------------+
+/// |  .m_col      |
+/// +--------------+
+/// |  .final_xor  |  
+/// +--------------+
+/// |  .counter    |  <-- from outside
+/// +--------------+
+/// |  .plain_text |  <-- from outside
+/// +--------------+
+/// ```
+///
+/// where:
+/// - `.start`
+///   denotes the state at the end of each round, except the final one.
+///   In other words, it is the round state excluding message and ciphertext.
+///   Therefore, it has length 10 * 16 = 160.
+/// - `.s_box`
+///   denotes the state at the end of each sbox operation.
+///   Therefore, it has length 10 * 16 = 160.
+/// - `.m_col`
+///   denotes the intermediate states of each mixcolumn operation.
+///   `m_col[0]` denotes the state after multiplication by Rj(2).
+///   `m_col[1]` up to `m_col[4]` denotes the state at the end of each xor operation.
+///    Therefore, it has length 16 * 9 * 5 = 720.
+///    (Note: the final AddRoundKey operation is not included involves `.start` and `.m_col[4]`)
+/// /// - `.final_xor`
+///   denotes the final xor between the encrypted counter and the plain text
+///    Therefore, it has length 16
+/// - `.counter` and `.plain_text`
+///  denote counter and plain_text, respectively. They are given as part of the statement.
+pub(super) const fn aes_gcm_block_offsets<const R: usize>() -> AesWitnessRegions {
     let start = 0;
     let s_box = start + 16 * (R - 1);
     // thank Rust for const for loops

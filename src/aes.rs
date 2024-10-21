@@ -244,7 +244,7 @@ pub struct RoundTrace {
 /// final_s_box: 1s6
 /// k_sch: 44 * 5
 /// m_col: 144 * 5
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct AesCipherTrace {
     pub message: [u8; 16],
     pub key: [u8; 16],
@@ -262,11 +262,13 @@ pub struct AesCipherTrace {
 }
 
 #[derive(Default, Clone, Copy)]
+//Maybe rename this? And modify the new function to support the GHASH option 
 pub struct AesGCMCounter {
     pub iv: [u8; 12], 
     pub count: u32
 }
 
+#[derive(Default, Clone,)]
 pub struct AesGCMCipherBlockTrace { 
     pub plaintext: [u8;16],
     pub counter: AesGCMCounter,
@@ -311,7 +313,7 @@ impl AesGCMCounter {
     }
 }
 
-impl AesGCMCipherxTrace {
+impl AesGCMCipherTrace {
     pub fn pt_slice(pt: &[u8], index: usize) -> [u8; 16] {
         assert!((index+1)*16 <= pt.len());
         pt[16*index..16*(index+1)].try_into().expect("slice with incorrect length")

@@ -9,7 +9,7 @@ use crate::aes;
 /// This function increases counters in the `dst` array for each occurrence of the 4-bit slices of `x` and `y` found in
 /// the witness.
 pub fn count_u16_frequencies<'a>(
-    dst: &mut [u8],
+    dst: &mut [u64],
     witness: impl IntoIterator<Item = &'a (u8, u8, u8)>,
 ) {
     for &(x, y, _z) in witness {
@@ -23,7 +23,7 @@ pub fn count_u16_frequencies<'a>(
 /// Counts the occurrences of 8-bit values in the given witness.
 ///
 /// This function increases counters in the `dst` array for each occurrence of `x` found in the witness.
-pub fn count_u8_frequencies<'a>(dst: &mut [u8], witness: impl IntoIterator<Item = &'a (u8, u8)>) {
+pub fn count_u8_frequencies<'a>(dst: &mut [u64], witness: impl IntoIterator<Item = &'a (u8, u8)>) {
     for &(x, _y) in witness {
         dst[x as usize] += 1;
     }
