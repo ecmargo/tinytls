@@ -12,6 +12,7 @@ pub struct AesGCMCounter {
     pub count: u32
 }
 
+#[derive(Default, Clone)]
 pub struct AesGCMCipherBlockTrace { 
     pub plaintext: [u8;16],
     pub counter: AesGCMCounter,
@@ -19,6 +20,7 @@ pub struct AesGCMCipherBlockTrace {
     pub final_xor: [u8; 16]
 }
 
+#[derive(Default, Clone)]
 pub struct AesGCMCipherTrace{
     pub icb: [u8;16],
     pub blocks: Vec<AesGCMCipherBlockTrace>

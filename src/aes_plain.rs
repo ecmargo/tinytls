@@ -40,76 +40,6 @@ pub fn aes256(message: [u8; 16], key: [u8; 32]) -> [u8; 16] {
     aes::<15, 8, 32>(message, key)
 }
 
-/// Transpose a vector of states in-place.
-pub fn transpose_inplace<T>(list: &mut [T]) {
-    for chunk in list.chunks_mut(16) {
-        for i in 0..4 {
-            for j in i..4 {
-                chunk.swap(i * 4 + j, j * 4 + i);
-            }
-        }
-    }
-}
-
-pub struct AesKeySchTrace<const R: usize, const N: usize> {
-    pub xor: [[u8; 4]; R],
-    pub s_box: [[u8; 4]; R],
-    pub round_keys: [[[u8; 4]; 4]; R],
-    pub _pre_xor: [[u8; 4]; R],
-}
-
-impl<const R: usize, const N: usize> Default for AesKeySchTrace<R, N> {
-    fn default() -> Self {
-        Self {
-            s_box: [[0u8; 4]; R],
-            round_keys: [[[0u8; 4]; 4]; R],
-            xor: [[0u8; 4]; R],
-            _pre_xor: [[0u8; 4]; R],
-        }
-    }
-}
-
-impl<const R: usize, const N: usize> AesKeySchTrace<R, N> {
-    pub fn new_aes128(key: &[u8; 16]) -> AesKeySchTrace<11, 4> {
-        AesKeySchTrace::new(key)
-    }
-
-    pub fn new_aes256(key: &[u8; 32]) -> AesKeySchTrace<15, 8> {
-        AesKeySchTrace::new(key)
-    }
-
-    pub fn new(key: &[u8]) -> Self {
-        let mut trace = AesKeySchTrace::default();
-        let n_4 = N / 4;
-
-        for i in 0..N {
-            let k = i / 4;
-            let j = i % 4;
-            trace.round_keys[k][j].copy_from_slice(&key[i * 4..(i + 1) * 4]);
-        }
-
-        for i in n_4..R {
-            if N > 6 && (i * 4) % N == 4 {
-                trace.s_box[i] = sbox(trace.round_keys[i - 1][3]);
-                trace._pre_xor[i] = trace.s_box[i];
-            } else {
-                let mut a = trace.round_keys[i - 1][3];
-                a.rotate_left(1);
-                trace.s_box[i] = sbox(a);
-                trace.xor[i] = xor(trace.s_box[i], [RC[i * 4 / N], 0, 0, 0]);
-                trace._pre_xor[i] = trace.xor[i];
-            }
-
-            trace.round_keys[i][0] = xor(trace.round_keys[i - n_4][0], trace._pre_xor[i]);
-            trace.round_keys[i][1] = xor(trace.round_keys[i - n_4][1], trace.round_keys[i][0]);
-            trace.round_keys[i][2] = xor(trace.round_keys[i - n_4][2], trace.round_keys[i][1]);
-            trace.round_keys[i][3] = xor(trace.round_keys[i - n_4][3], trace.round_keys[i][2]);
-        }
-
-        trace
-    }
-}
-
 #[derive(Default)]
 pub struct RoundTrace {
     // be careful here: SBOX is applied after shiftrows
@@ -130,7 +60,7 @@ pub struct RoundTrace {
 /// final_s_box: 1s6
 /// k_sch: 44 * 5
 /// m_col: 144 * 5
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct AesCipherTrace {
     pub message: [u8; 16],
     pub key: [u8; 16],

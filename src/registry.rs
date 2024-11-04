@@ -18,12 +18,7 @@ pub(super) struct AesGCMBlockWitnessRegions {
     pub plain_text: usize,
     pub witness_len: usize,
     pub needles_len: usize,
-}
-
-pub(super) struct AesGCMCipherWitnessRegions {
-    pub icb: usize,
-    pub round_keys: usize,
-    pub blocks: usize
+    pub full_witness_round_keys_location: usize
 }
 
 pub(super) struct AesKeySchWitnessRegions {
@@ -150,7 +145,7 @@ pub(super) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
 ///    Therefore, it has length 16
 /// - `.counter` and `.plain_text`
 ///  denote counter and plain_text, respectively. They are given as part of the statement.
-pub(super) const fn aes_gcm_block_offsets<const R: usize>() -> AesWitnessRegions {
+pub(super) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnessRegions {
     let start = 0;
     let s_box = start + 16 * (R - 1);
     // thank Rust for const for loops
@@ -164,26 +159,66 @@ pub(super) const fn aes_gcm_block_offsets<const R: usize>() -> AesWitnessRegions
         m_col_offset + m_col_len * 3,
         m_col_offset + m_col_len * 4,
     ];
-    // let addroundkey_len = 16 * 11;
-    let message = m_col[4] + m_col_len;
-    let round_keys = message + 16;
+    let final_xor = m_col[4] + m_col_len;
+    let counter = final_xor + 16;
+    let plain_text = counter + 16;
     let needles_len =
             16 * (R-1) + // s_box
             16 * (R-2) + // rj2
             16 * (R-2) * 5 * 2 + // m_col xor's
-            16 * 2 * 2 // addroundkey first and last
+            16 * 2 * 2 + // addroundkey first and last
+            16 //final xor 
         ;
+    let icb_region = aes_offsets::<R>(); 
+    let round_key_loc = icb_region.round_keys; 
 
-    AesWitnessRegions {
+    AesGCMBlockWitnessRegions {
         start,
         s_box,
         m_col,
-        message,
-        round_keys,
-        witness_len: round_keys + 16 * R,
+        final_xor,
+        counter,
+        plain_text,
+        witness_len: plain_text + 16,
+        full_witness_round_keys_location: round_key_loc, 
         needles_len,
     }
 }
+
+// Takes in n_cipher blocks which excludes the initial ICB 
+// pub(super) const fn aes_gcm_cipher_offsets<const R: usize>(n_cipher_blocks: usize) -> AesGCMCipherWitnessRegions {
+//     let start = 0;
+//     let s_box = start + 16 * (R - 1);
+//     // thank Rust for const for loops
+//     let m_col_offset = s_box + 16 * (R - 1);
+//     let m_col_len = 16 * (R - 2);
+//     #[allow(clippy::all)]
+//     let m_col = [
+//         m_col_offset + m_col_len * 0,
+//         m_col_offset + m_col_len * 1,
+//         m_col_offset + m_col_len * 2,
+//         m_col_offset + m_col_len * 3,
+//         m_col_offset + m_col_len * 4,
+//     ];
+//     // let addroundkey_len = 16 * 11;
+//     let message = m_col[4] + m_col_len;
+//     let round_keys = message + 16;
+//     let needles_len =
+//             16 * (R-1) + // s_box
+//             16 * (R-2) + // rj2
+//             16 * (R-2) * 5 * 2 + // m_col xor's
+//             16 * 2 * 2 // addroundkey first and last
+//         ;
+
+//         // pub(super) struct AesGCMCipherWitnessRegions {
+//         //     pub icb: usize,
+//         //     pub round_keys: usize,
+//         //     pub blocks: usize
+//         // }
+
+//         AesGCMCipherWitnessRegions {
+//     }
+// }
 
 pub const AES128REG: AesWitnessRegions = aes_offsets::<11>();
 pub const AES256REG: AesWitnessRegions = aes_offsets::<15>();

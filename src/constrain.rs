@@ -1,6 +1,6 @@
 use ark_ff::Field;
 
-use crate::{aes, registry};
+use crate::{aes_plain, aes_utils, registry};
 
 pub fn aes_trace_to_needles<F: Field, const R: usize>(
     output: &[u8; 16],
@@ -36,19 +36,40 @@ pub fn aes_keysch_trace_to_needles<F: Field, const R: usize, const N: usize>(
     (dst, constant_term)
 }
 
-// pub fn aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
-//     aes_output: &[u8; 16],
-//     src: &[F],
-//     [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
-// ) -> (Vec<F>, F) {
-//src is powers of the evaluation point that we want to do that is transformed to convert a query from the needles vector to one 
+pub fn aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
+    aes_output: &[u8; 16],
+    final_xor: &[u8; 16],
+    src: &[F],
+    [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
+) ->  (Vec<F>, F) {
+    let regions  = registry::aes_gcm_block_offsets::<R>(); 
 
-// }
+    let mut dst = vec![F::zero(); regions.witness_len * 2];
+    let mut offset = 0;
+    cipher_sbox::<F, R>(&mut dst, src, c_sbox);
+    offset += 16 * (R - 1);
+    cipher_rj2::<F, R>(&mut dst, &src[offset..], c_rj2);
+    offset += 16 * (R - 2);
+    cipher_mcol::<F, R>(&mut dst, &src[offset..], c_xor, c_xor2);
+    offset += 16 * (R - 2) * 4 * 2;
+    let constant_term = cipher_addroundkey::<F, R>(aes_output, &mut dst, &src[offset..], c_xor, c_xor2);
+    gcm_final_xor::<F,R>(&mut dst, &src[offset..], c_xor, c_xor2);
+   //not including the constant term here because im not sure its needed? 
+   (dst, constant_term)
+// src is powers of the evaluation point that we want to do that is transformed to convert a query from the needles vector to on
+//For now just try to write the new sbox and  xor stuff dont worry about the round keys 
+}
+
+pub fn vec_cipher_sbox<F:Field, const R: usize>(witness: Vec<u8>, c_sbox: F) -> Vec<F> { 
+    let regions = registry::aes_gcm_block_offsets::<R>(); 
+    let in_vec = 
+
+}
 
 
 pub fn cipher_sbox<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-    let s_row = aes::shiftrows(identity);
+    let s_row = aes_utils::shiftrows(identity);
     let reg = registry::aes_offsets::<R>();
 
     for round in 0..R - 1 {
@@ -86,10 +107,10 @@ pub fn cipher_mcol<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F
     let registry = registry::aes_offsets::<R>();
 
     let mut aux_m_col = vec![identity; 4];
-    aes::rotate_right_inplace(&mut aux_m_col[0], 1);
-    aes::rotate_right_inplace(&mut aux_m_col[1], 2);
-    aes::rotate_right_inplace(&mut aux_m_col[2], 3);
-    aes::rotate_right_inplace(&mut aux_m_col[3], 3);
+    aes_utils::rotate_right_inplace(&mut aux_m_col[0], 1);
+    aes_utils::rotate_right_inplace(&mut aux_m_col[1], 2);
+    aes_utils::rotate_right_inplace(&mut aux_m_col[2], 3);
+    aes_utils::rotate_right_inplace(&mut aux_m_col[3], 3);
 
     for k in 0..4 {
         for round in 0..R - 2 {
@@ -113,6 +134,34 @@ pub fn cipher_mcol<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F
             }
         }
     }
+}
+
+pub fn gcm_final_xor<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F) {
+    let reg = registry::aes_gcm_block_offsets::<R>();
+    let mut v_pos = 0; 
+
+    //XOR over 16 byte messages
+    for i in 0..16 {
+        let x_pos = 16 * i;
+        let y_pos = 16 * (i+1);
+        let z_pos = 16 * (i+2);
+
+        let v_even = v[v_pos * 2];
+        let v_odd = v[v_pos * 2 + 1];
+
+        dst[(reg.final_xor + x_pos) * 2] += v_even;
+        dst[(reg.final_xor + y_pos) * 2] += r * v_even;
+        dst[(reg.final_xor + z_pos) * 2] += r2 * v_even;
+
+        dst[(reg.final_xor + x_pos) * 2 + 1] += v_odd;
+        dst[(reg.final_xor + y_pos) * 2 + 1] += r * v_odd;
+        dst[(reg.final_xor + z_pos) * 2 + 1] += r2 * v_odd;
+
+        v_pos += 1;
+    }
+
+
+
 }
 
 pub fn cipher_addroundkey<F: Field, const R: usize>(

@@ -1,7 +1,5 @@
 #![forbid(unsafe_code)]
 
-/// Basic AES implementation.
-pub mod aes;
 /// Common AES functionalities.
 pub mod aes_utils;
 /// Basic AES implementation (key schedule).
@@ -22,6 +20,12 @@ mod lookup;
 pub mod pedersen;
 /// Prover module.
 mod prover;
+/// Witness gen module - AES .
+mod witness_plain;
+/// Witness gen module - KS .
+mod witness_ks;
+/// Witness gen module - GCM .
+mod witness_gcm;
 /// Helper module for the prover and verifier.
 mod registry;
 /// Core sigma protocols sub-protocols.
@@ -35,7 +39,7 @@ mod tests;
 #[allow(non_snake_case)]
 mod traits;
 /// Fast MSM for u8 scalar elements.
-mod u8msm;
+mod umsm;
 /// Verifier module.
 mod verifier;
 

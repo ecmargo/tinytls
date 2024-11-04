@@ -1,6 +1,6 @@
 use nimue::plugins::ark::IOPattern;
 
-use crate::{aes, pedersen, TinybearIO};
+use crate::{aes_plain, pedersen, TinybearIO};
 
 type G = ark_curve25519::EdwardsProjective;
 // type F = ark_curve25519::Fr;
@@ -15,7 +15,7 @@ fn test_aes128() {
 
     let message = *b"\x4A\x8F\x6D\xE2\x12\x7B\xC9\x34\xA5\x58\x91\xFD\x23\x69\x0C\xE7";
     let key = *b"\xE7\x4A\x8F\x6D\xE2\x12\x7B\xC9\x34\xA5\x58\x91\xFD\x23\x69\x0C";
-    let ctx = aes::aes128(message, key);
+    let ctx = aes_plain::aes128(message, key);
 
     let (message_commitment, message_opening) =
         crate::commit_aes128_message(merlin.rng(), &ck, message);
@@ -80,7 +80,7 @@ fn test_aes256() {
 
     let message = *b"\x4A\x8F\x6D\xE2\x12\x7B\xC9\x34\xA5\x58\x91\xFD\x23\x69\x0C\xE7";
     let key = *b"\xE7\x4A\x8F\x6D\xE2\x12\x7B\xC9\x34\xA5\x58\x91\xFD\x23\x69\x0C\xE7\x4A\x8F\x6D\xE2\x12\x7B\xC9\x34\xA5\x58\x91\xFD\x23\x69\x0C";
-    let ctx = aes::aes256(message, key);
+    let ctx = aes_plain::aes256(message, key);
 
     let (message_commitment, message_opening) =
         crate::commit_aes256_message(merlin.rng(), &ck, message);
