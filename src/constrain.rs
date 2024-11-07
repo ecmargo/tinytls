@@ -141,7 +141,6 @@ pub fn vec_cipher_rj2<F: Field, const R: usize>(c_rj2: F) -> (Vec<F>, Vec<usize>
     let regions = registry::aes_offsets::<R>();
 
     let high = F::from(16);
-    let offset = 16*(R-1);
     let mut input;
     let mut output;
 
@@ -151,7 +150,7 @@ pub fn vec_cipher_rj2<F: Field, const R: usize>(c_rj2: F) -> (Vec<F>, Vec<usize>
 
     let mut counter = 0;
 
-    for round in 0..R - 1 {
+    for round in 0..R - 2 {
         for i in 0..16 {
             let pos = 16 * round + i;
             input = (regions.s_box + pos) * 2;
@@ -457,8 +456,7 @@ fn test_rj2() {
         0x0C,
     ];
 
-    let c_rj2 = F::ONE;
-    //F::rand(rng);
+    let c_rj2 = F::rand(rng);
 
     let haystack_r2j = (0u8..=255)
     .map(|i| {
@@ -474,11 +472,11 @@ fn test_rj2() {
 
     let offset = 16 * 10;
 
-    let sub = &vector_witness[offset..];
+    let sub = (&vector_witness[offset..]).to_vec();
 
     let (v, idx, round_state) = vec_cipher_rj2::<F, 11>(c_rj2);
 
-    let output: Vec<F> = combine_yale_to_needles(round_state, idx, v, sub.to_vec());
+    let output: Vec<F> = combine_yale_to_needles(round_state, idx, v, vector_witness);
 
     assert!(output.into_iter().all(|x|(haystack_r2j.contains(&x))));
 }
