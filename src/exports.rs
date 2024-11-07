@@ -5,10 +5,10 @@ use rand::{CryptoRng, RngCore};
 
 use crate::pedersen::CommitmentKey;
 use crate::prover::aes_prove;
-use crate::witness_plain::AesCipherWitness;
-use crate::witness_ks::AesKeySchWitness;
 use crate::sigma::{self, SigmaProof};
 use crate::verifier::{aes_verify, AesCipherInstance, AeskeySchInstance};
+use crate::witness_ks::AesKeySchWitness;
+use crate::witness_plain::AesCipherWitness;
 use crate::{aes_ks, registry, umsm};
 
 pub use crate::traits::*;

@@ -1,8 +1,5 @@
-use std::result;
-use crate::aes_utils::{shiftrows, sbox, mixcolumns, xor, RC, rotate_right_inplace, RJ2};
-use crate::aes_ks::{keyschedule,aes128_keyschedule, aes256_keyschedule};
-
-use hex_literal::hex;
+use crate::aes_ks::{aes128_keyschedule, aes256_keyschedule, keyschedule};
+use crate::aes_utils::{mixcolumns, rotate_right_inplace, sbox, shiftrows, xor, RJ2};
 
 fn aes_round(mut state: [u8; 16], round_key: [u8; 16]) -> [u8; 16] {
     // Note: shiftrows before sbox
@@ -161,7 +158,6 @@ pub fn aes_round_trace(state: [u8; 16], key: [u8; 16]) -> RoundTrace {
     trace.start = xor(trace.m_col[4], key);
     trace
 }
-
 
 #[test]
 fn test_aes_round_trace() {

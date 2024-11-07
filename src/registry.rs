@@ -18,7 +18,7 @@ pub(super) struct AesGCMBlockWitnessRegions {
     pub plain_text: usize,
     pub witness_len: usize,
     pub needles_len: usize,
-    pub full_witness_round_keys_location: usize
+    pub full_witness_round_keys_location: usize,
 }
 
 pub(super) struct AesKeySchWitnessRegions {
@@ -140,7 +140,7 @@ pub(super) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
 ///   `m_col[1]` up to `m_col[4]` denotes the state at the end of each xor operation.
 ///    Therefore, it has length 16 * 9 * 5 = 720.
 ///    (Note: the final AddRoundKey operation is not included involves `.start` and `.m_col[4]`)
-/// /// - `.final_xor`
+/// - `.final_xor`
 ///   denotes the final xor between the encrypted counter and the plain text
 ///    Therefore, it has length 16
 /// - `.counter` and `.plain_text`
@@ -169,8 +169,8 @@ pub(super) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnes
             16 * 2 * 2 + // addroundkey first and last
             16 //final xor 
         ;
-    let icb_region = aes_offsets::<R>(); 
-    let round_key_loc = icb_region.round_keys; 
+    let icb_region = aes_offsets::<R>();
+    let round_key_loc = icb_region.round_keys;
 
     AesGCMBlockWitnessRegions {
         start,
@@ -180,7 +180,7 @@ pub(super) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnes
         counter,
         plain_text,
         witness_len: plain_text + 16,
-        full_witness_round_keys_location: round_key_loc, 
+        full_witness_round_keys_location: round_key_loc,
         needles_len,
     }
 }

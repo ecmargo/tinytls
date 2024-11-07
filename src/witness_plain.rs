@@ -1,33 +1,23 @@
 //! See Figure 8 in the paper to learn how this protocol works
 #![allow(non_snake_case)]
 
-// use std::slice::range;
+use ark_ff::Field;
 
-use ark_ec::CurveGroup;
-use ark_ff::{Field, PrimeField, Zero};
-
-use nimue::plugins::ark::*;
-use nimue::ProofResult;
-
-use super::{constrain, linalg, lookup, pedersen, sigma, sumcheck};
+use super::lookup;
 use crate::aes_plain::AesCipherTrace;
-use crate::aes_ks::AesKeySchTrace;
-use crate::{aes_ks, aes_plain, witness_ks::*};
-use crate::pedersen::CommitmentKey;
-use crate::registry::{aes_keysch_offsets, aes_offsets};
-use crate::traits::{LinProof, Witness};
-use crate::MultiBlockWitness;
+use crate::registry::aes_offsets;
+use crate::traits::Witness;
+use crate::{aes_ks, aes_plain};
 
-
-//See about moving the round keys once to the very end instead of the very front 
+//See about moving the round keys once to the very end instead of the very front
 #[derive(Clone)]
 pub struct AesCipherWitness<F: Field, const R: usize, const N: usize> {
-    trace: AesCipherTrace,
-    witness_vec: Vec<u8>,
-    message: [u8; 16],
-    round_keys: [[u8; 16]; R],
-    message_opening: F,
-    key_opening: F,
+    pub trace: AesCipherTrace,
+    pub witness_vec: Vec<u8>,
+    pub message: [u8; 16],
+    pub round_keys: [[u8; 16]; R],
+    pub message_opening: F,
+    pub key_opening: F,
 }
 
 impl<F: Field, const R: usize, const N: usize> AesCipherWitness<F, R, N> {

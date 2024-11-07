@@ -1,6 +1,6 @@
-use ark_ff::Field;
+use ark_ff::{AdditiveGroup, Field};
 
-use crate::{aes_plain, aes_utils, registry};
+use crate::{aes_utils, registry, Witness};
 
 pub fn aes_trace_to_needles<F: Field, const R: usize>(
     output: &[u8; 16],
@@ -41,8 +41,8 @@ pub fn aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
     final_xor: &[u8; 16],
     src: &[F],
     [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
-) ->  (Vec<F>, F) {
-    let regions  = registry::aes_gcm_block_offsets::<R>(); 
+) -> (Vec<F>, F) {
+    let regions = registry::aes_gcm_block_offsets::<R>();
 
     let mut dst = vec![F::zero(); regions.witness_len * 2];
     let mut offset = 0;
@@ -52,33 +52,97 @@ pub fn aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
     offset += 16 * (R - 2);
     cipher_mcol::<F, R>(&mut dst, &src[offset..], c_xor, c_xor2);
     offset += 16 * (R - 2) * 4 * 2;
-    let constant_term = cipher_addroundkey::<F, R>(aes_output, &mut dst, &src[offset..], c_xor, c_xor2);
-    gcm_final_xor::<F,R>(&mut dst, &src[offset..], c_xor, c_xor2);
-   //not including the constant term here because im not sure its needed? 
-   (dst, constant_term)
-// src is powers of the evaluation point that we want to do that is transformed to convert a query from the needles vector to on
-//For now just try to write the new sbox and  xor stuff dont worry about the round keys 
+    let constant_term =
+        cipher_addroundkey::<F, R>(aes_output, &mut dst, &src[offset..], c_xor, c_xor2);
+    gcm_final_xor::<F, R>(&mut dst, &src[offset..], c_xor, c_xor2);
+    //not including the constant term here because im not sure its needed?
+    (dst, constant_term)
+    // src is powers of the evaluation point that we want to do that is transformed to convert a query from the needles vector to on
+    //For now just try to write the new sbox and  xor stuff dont worry about the round keys
 }
 
-// pub fn vec_cipher_sbox<F:Field, const R: usize>(witness: Vec<u8>, c_sbox: F) -> Vec<F> { 
-//     let regions = registry::aes_gcm_block_offsets::<R>(); 
-//     let combo_vec = vec![F::zero(); regions.witness_len];
+//Need to create a witness expansion function splitting everything into upper and lower 4bits -> look into yale representation,
+//instead of
 
-//     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-//     let s_row = aes_utils::shiftrows(identity);
+//assume witness is 2*size
+pub fn vec_cipher_sbox<F: Field, const R: usize>(selector_vec: &[F], c_sbox: F) -> Vec<Vec<F>> {
+    let regions = registry::aes_gcm_block_offsets::<R>();
 
-//     for round in 0..R-1 { 
-//         for i in 0..16 {
-//             let input_index = regions.start + (16*round + s_row[i]); 
-//             let output_index = 
-//         }
-//     }
-//     combo_vec
+    let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    let s_row = aes_utils::shiftrows(identity);
 
+    let high = F::from(16);
+    let mut input;
+    let mut output;
 
+    let mut selector_matrix: Vec<Vec<F>> = Vec::new(); 
 
-// }
+    //Structure as a Vec<Vec<F>> where you push after each inner iteration
+    for round in 0..R - 1 {
+        for i in 0..16 {
+            let mut select = selector_vec.to_vec();
+            let s_row_pos = 16 * round + s_row[i] as usize;
+            let s_box_pos = 16 * round + i;
+            input = (regions.start + s_row_pos) * 2;
+            output = (regions.s_box + s_box_pos) * 2;
+            select[input] = F::ONE;
+            select[input + 1] = high;
+            select[output] = c_sbox;
+            select[output + 1] = c_sbox * high;
+            selector_matrix.push(select.to_vec());
+        }
+    }
+    selector_matrix
+}
 
+#[test]
+fn test_xi_sbox() {
+    use crate::linalg;
+    type F = ark_curve25519::Fr;
+    use crate::witness_plain::AesCipherWitness;
+    use ark_std::{UniformRand, Zero};
+
+    let rng = &mut rand::thread_rng();
+
+    let message = [
+        0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69, 0x0C,
+        0xE7,
+    ];
+    let key = [
+        0xE7u8, 0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69,
+        0x0C,
+    ];
+    
+    let c_sbox = F::rand(rng);
+
+    let witness = AesCipherWitness::<F, 11, 4>::new(message, &key, F::zero(), F::zero());
+
+    let vector_witness = AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+
+    let regions = registry::aes_offsets::<11>();
+
+    let mut dst = vec![F::zero(); vector_witness.len()];
+
+    assert_eq!(regions.witness_len * 2, dst.len());
+
+    let selector_matrix = vec_cipher_sbox::<F, 11>(&mut dst, c_sbox);
+
+    println!("{:?}", &vector_witness[0..1000]);
+
+    let wit_f: Vec<F> = vector_witness.into_iter().map(F::from).collect();
+
+    let output: Vec<F> = selector_matrix.into_iter().map(|select| linalg::inner_product(&select, &wit_f)).collect();
+
+    let haystack_s_box = (0u8..=255)
+        .map(|i| {
+            let x = i;
+            let y = aes_utils::SBOX[x as usize];
+            F::from(x) + c_sbox * F::from(y)
+        })
+        .collect::<Vec<_>>();
+
+    assert!(output.into_iter().all(|x|(haystack_s_box.contains(&x))));
+}
 
 pub fn cipher_sbox<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
@@ -151,13 +215,13 @@ pub fn cipher_mcol<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F
 
 pub fn gcm_final_xor<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F) {
     let reg = registry::aes_gcm_block_offsets::<R>();
-    let mut v_pos = 0; 
+    let mut v_pos = 0;
 
     //XOR over 16 byte messages
     for i in 0..16 {
         let x_pos = 16 * i;
-        let y_pos = 16 * (i+1);
-        let z_pos = 16 * (i+2);
+        let y_pos = 16 * (i + 1);
+        let z_pos = 16 * (i + 2);
 
         let v_even = v[v_pos * 2];
         let v_odd = v[v_pos * 2 + 1];
@@ -172,9 +236,6 @@ pub fn gcm_final_xor<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2:
 
         v_pos += 1;
     }
-
-
-
 }
 
 pub fn cipher_addroundkey<F: Field, const R: usize>(
@@ -240,7 +301,7 @@ pub fn ks_lin_sbox_map<F: Field, const R: usize, const N: usize>(dst: &mut [F], 
     let reg = registry::aes_keysch_offsets::<R, N>();
     let n_4 = N / 4;
     let identity = [0, 1, 2, 3];
-    let mut rotated_left = identity.clone();
+    let mut rotated_left = identity;
     rotated_left.rotate_left(1);
 
     for round in n_4..R {

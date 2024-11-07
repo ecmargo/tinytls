@@ -1,4 +1,4 @@
-use crate::aes_utils::{shiftrows, sbox, mixcolumns, xor, RC};
+use crate::aes_utils::{sbox, xor, RC};
 
 #[inline]
 pub fn aes128_keyschedule(key: &[u8; 16]) -> [[u8; 16]; 11] {

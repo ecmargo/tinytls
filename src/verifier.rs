@@ -63,9 +63,9 @@ where
     let (lin_sumcheck_chals, reduced_claim) = sumcheck::reduce(arthur, n, lin_claim);
 
     let lin_sumcheck_chals_vec = &linalg::tensor(&lin_sumcheck_chals)[..n];
-    let lin_h_fold = linalg::inner_product(&lin_sumcheck_chals_vec, &h_vec);
-    let lin_ipa_cs_c_q_fold = linalg::inner_product(&lin_sumcheck_chals_vec, &ipa_cs_c_q_vec);
-    let lin_s_fold = linalg::inner_product(&lin_sumcheck_chals_vec, &s_vec);
+    let lin_h_fold = linalg::inner_product(lin_sumcheck_chals_vec, &h_vec);
+    let lin_ipa_cs_c_q_fold = linalg::inner_product(lin_sumcheck_chals_vec, &ipa_cs_c_q_vec);
+    let lin_s_fold = linalg::inner_product(lin_sumcheck_chals_vec, &s_vec);
     let Z = instance.full_witness_com(&W);
     let [lin_M_fold, lin_Q_fold]: [G; 2] = arthur.next_points().unwrap();
     let lin_Z_fold =

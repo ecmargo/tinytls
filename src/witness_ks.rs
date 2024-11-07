@@ -3,19 +3,11 @@
 
 // use std::slice::range;
 
-use ark_ec::CurveGroup;
-use ark_ff::{Field, PrimeField, Zero};
-
-use nimue::plugins::ark::*;
-use nimue::ProofResult;
-
-use super::{constrain, linalg, lookup, pedersen, sigma, sumcheck};
+use super::{constrain, lookup};
 use crate::aes_ks::{self, AesKeySchTrace};
-use crate::pedersen::CommitmentKey;
-use crate::registry::{aes_keysch_offsets, aes_offsets};
-use crate::traits::{LinProof, Witness};
-use crate::MultiBlockWitness;
-
+use crate::registry::aes_keysch_offsets;
+use crate::traits::Witness;
+use ark_ff::Field;
 
 pub struct AesKeySchWitness<F: Field, const R: usize, const N: usize> {
     trace: AesKeySchTrace<R, N>,
@@ -109,7 +101,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesKeySchWitness<F
         [c_xor, c_xor2, c_sbox, _c_rj2]: [F; 4],
     ) -> (Vec<F>, Vec<F>, Vec<u64>) {
         let witness_s_box = self.get_s_box_witness();
-        //This will need to chang since we'll have an additional xor 
+        //This will need to chang since we'll have an additional xor
         let witness_xor = self.get_xor_witness();
         let s_box_needles = lookup::compute_u8_needles(&witness_s_box, c_sbox);
         let xor_needles = lookup::compute_u16_needles(&witness_xor, [c_xor, c_xor2]);

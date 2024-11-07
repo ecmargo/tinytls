@@ -3,67 +3,75 @@
 
 // use std::slice::range;
 
-use ark_ec::CurveGroup;
-use ark_ff::{Field, PrimeField, Zero};
+use ark_ff::Field;
 
-use nimue::plugins::ark::*;
-use nimue::ProofResult;
-
-use super::{constrain, linalg, lookup, pedersen, sigma, sumcheck};
-use crate::aes_plain::AesCipherTrace;
-use crate::aes_ks::AesKeySchTrace;
+use super::lookup;
 use crate::aes_gcm::{self, AesGCMCipherBlockTrace, AesGCMCipherTrace, AesGCMCounter};
+use crate::registry::aes_gcm_block_offsets;
+use crate::traits::Witness;
 use crate::witness_plain::AesCipherWitness;
-use crate::pedersen::CommitmentKey;
-use crate::registry::{aes_gcm_block_offsets, aes_keysch_offsets, aes_offsets};
-use crate::traits::{LinProof, Witness};
 use crate::MultiBlockWitness;
 
 #[derive(Default, Clone)]
 pub struct AesGCMCipherBlockWitness<F: Field, const R: usize, const N: usize> {
-    trace: AesGCMCipherBlockTrace, 
-    witness_vec: Vec<u8>, 
-    counter: [u8; 16], 
-    key_opening: F, 
+    trace: AesGCMCipherBlockTrace,
+    witness_vec: Vec<u8>,
+    counter: [u8; 16],
+    key_opening: F,
     plain_text: [u8; 16],
-    plain_text_opening: F
+    plain_text_opening: F,
 }
 
 #[derive(Clone)]
 pub struct AesGCMCipherWitness<F: Field, const R: usize, const N: usize> {
-    icb_witness: AesCipherWitness<F, R, N>, 
+    icb_witness: AesCipherWitness<F, R, N>,
     block_witnesses: Vec<AesGCMCipherBlockWitness<F, R, N>>,
 }
 
-impl <F:Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F,R,N> {
-    pub fn new(counter: AesGCMCounter, key: &[u8], plain_text: [u8; 16],  key_opening: F, plain_text_opening: F) -> Self {
-        assert_eq!(key.len(), N*4); 
-        let trace = AesGCMCipherBlockTrace::new(key.try_into().expect("invalid keylenght"), counter.clone(), plain_text);
+impl<F: Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F, R, N> {
+    pub fn new(
+        counter: AesGCMCounter,
+        key: &[u8],
+        plain_text: [u8; 16],
+        key_opening: F,
+        plain_text_opening: F,
+    ) -> Self {
+        assert_eq!(key.len(), N * 4);
+        let trace = AesGCMCipherBlockTrace::new(
+            key.try_into().expect("invalid keylenght"),
+            counter,
+            plain_text,
+        );
         let witness_vec = Self::vectorize_witness(&trace);
         Self {
-            trace: trace, 
-            witness_vec: witness_vec, 
-            counter: counter.make_counter(), 
-            key_opening: key_opening, 
-            plain_text: plain_text, 
-            plain_text_opening: plain_text_opening
+            trace,
+            witness_vec,
+            counter: counter.make_counter(),
+            key_opening,
+            plain_text,
+            plain_text_opening,
         }
     }
 
-    pub(crate) fn vectorize_witness(witness: &aes_gcm::AesGCMCipherBlockTrace)->Vec<u8> {
-        let mut w: Vec<u8> = AesCipherWitness::<F,R,N>::vectorize_witness(&witness.aes_cipher_trace);
+    pub(crate) fn vectorize_witness(witness: &aes_gcm::AesGCMCipherBlockTrace) -> Vec<u8> {
+        let mut w: Vec<u8> =
+            AesCipherWitness::<F, R, N>::vectorize_witness(&witness.aes_cipher_trace);
         let registry = crate::registry::aes_gcm_block_offsets::<R>();
-        assert_eq!(registry.final_xor,w.len());
+        assert_eq!(registry.final_xor, w.len());
 
-        let final_xor: Vec<u8> = witness.final_xor.iter().flat_map(|x: &u8|  [x & 0xf, x >> 4]).collect();
+        let final_xor: Vec<u8> = witness
+            .final_xor
+            .iter()
+            .flat_map(|x: &u8| [x & 0xf, x >> 4])
+            .collect();
         w.extend(final_xor);
         w
     }
 
     //This is not the optimal way to do this,too much repeated code :(
-    fn get_xor_witness(&self) -> Vec<(u8, u8, u8)> { 
-        let aes_trace = &self.trace.aes_cipher_trace; 
-    
+    fn get_xor_witness(&self) -> Vec<(u8, u8, u8)> {
+        let aes_trace = &self.trace.aes_cipher_trace;
+
         let mut witness_xor = Vec::new();
         // m_col_xor
         for i in 0..4 {
@@ -84,7 +92,8 @@ impl <F:Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F,R,N> {
         }
         // last round
         {
-            let xs = aes_trace.s_box
+            let xs = aes_trace
+                .s_box
                 .iter()
                 .skip(aes_trace.s_box.len() - 16)
                 .copied();
@@ -102,14 +111,14 @@ impl <F:Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F,R,N> {
             let new_witness = xs.zip(zs).map(|(x, z)| (x, x ^ z, z));
             witness_xor.extend(new_witness);
         }
-        //Plaintext XOR 
-        //Need to remember where the plaintext is 
-        //This will also affect the frequencies table 
+        //Plaintext XOR
+        //Need to remember where the plaintext is
+        //This will also affect the frequencies table
         //(plaintext, enc_ctr, XOR )
         {
-            let xs = aes_trace.output.iter().copied(); 
+            let xs = aes_trace.output.iter().copied();
             let ys = self.trace.plaintext.iter().copied();
-            let zs = self.trace.final_xor.iter().copied(); 
+            let zs = self.trace.final_xor.iter().copied();
             let new_witness = xs.zip(ys).zip(zs).map(|((x, y), z)| (x, y, z));
             witness_xor.extend(new_witness);
         }
@@ -117,7 +126,12 @@ impl <F:Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F,R,N> {
     }
 
     fn get_s_box_witness(&self) -> Vec<(u8, u8)> {
-        let s_box = self.trace.aes_cipher_trace._s_row.iter().zip(&self.trace.aes_cipher_trace.s_box);
+        let s_box = self
+            .trace
+            .aes_cipher_trace
+            ._s_row
+            .iter()
+            .zip(&self.trace.aes_cipher_trace.s_box);
         // let k_sch_s_box = witness._k_rot.iter().zip(&witness.k_sch_s_box);
         s_box.map(|(&x, &y)| (x, y)).collect()
     }
@@ -136,18 +150,17 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockW
 
     fn needles_len(&self) -> usize {
         aes_gcm_block_offsets::<R>().needles_len
-
     }
 
     fn full_witness_opening(&self) -> F {
-        self.key_opening+self.plain_text_opening
+        self.key_opening + self.plain_text_opening
     }
 
     fn compute_needles_and_frequencies(
         &self,
         [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
     ) -> (Vec<F>, Vec<F>, Vec<u64>) {
-         // Generate the witness.
+        // Generate the witness.
         // witness_s_box = [(a, sbox(a)), (b, sbox(b)), ...]
         let witness_s_box = self.get_s_box_witness();
         // witness_r2j = [(a, r2j(a)), (b, r2j(b)), ...]
@@ -182,17 +195,14 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockW
 
     fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
         let aes_output = &self.trace.aes_cipher_trace.output;
-        let final_xor = &self.trace.final_xor;  
-        let out: Vec<F> = Vec::new(); 
+        let final_xor = &self.trace.final_xor;
+        let out: Vec<F> = Vec::new();
         (out, F::ZERO)
     }
 
     fn full_witness(&self) -> Vec<F> {
         let ctr = self.counter.iter().flat_map(|x| [x & 0xf, x >> 4]);
-        let pt = self
-            .plain_text
-            .iter()
-            .flat_map(|x| [x & 0xf, x >> 4]);
+        let pt = self.plain_text.iter().flat_map(|x| [x & 0xf, x >> 4]);
         self.witness_vec
             .iter()
             .copied()
@@ -201,11 +211,10 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockW
             .map(F::from)
             .collect()
     }
-
 }
 
 #[test]
-fn test_compute_needles_and_freq_single_block(){
+fn test_compute_needles_and_freq_single_block() {
     use crate::linalg;
     type F = ark_curve25519::Fr;
     use ark_std::{UniformRand, Zero};
@@ -213,11 +222,11 @@ fn test_compute_needles_and_freq_single_block(){
 
     let rng = &mut rand::thread_rng();
 
-    let plain_text: [u8;16] = hex!("001d0c231287c1182784554ca3a21908");
+    let plain_text: [u8; 16] = hex!("001d0c231287c1182784554ca3a21908");
     let key: [u8; 16] = hex!("5b9604fe14eadba931b0ccf34843dab9");
-    let iv: [u8; 12] = hex!("028318abc1824029138141a2"); 
-    let mut ctr = AesGCMCounter::create_icb(iv); 
-    ctr.count = ctr.count+1;
+    let iv: [u8; 12] = hex!("028318abc1824029138141a2");
+    let mut ctr = AesGCMCounter::create_icb(iv);
+    ctr.count += 1;
 
     // actual length needed is: ceil(log(OFFSETS.cipher_len * 2))
     let challenges = (0..15).map(|_| F::rand(rng)).collect::<Vec<_>>();
@@ -227,60 +236,75 @@ fn test_compute_needles_and_freq_single_block(){
     let c_xor2 = F::rand(rng);
     let c_sbox = F::rand(rng);
     let c_rj2 = F::rand(rng);
-    
-    let witness = AesGCMCipherBlockWitness::<F, 15, 8>::new(ctr, &key, plain_text, F::zero(), F::zero());
-    let (needles, freq, freq_u64) = witness.compute_needles_and_frequencies([c_xor, c_xor2, c_sbox, c_rj2]);
+
+    let witness =
+        AesGCMCipherBlockWitness::<F, 15, 8>::new(ctr, &key, plain_text, F::zero(), F::zero());
+    let (needles, freq, freq_u64) =
+        witness.compute_needles_and_frequencies([c_xor, c_xor2, c_sbox, c_rj2]);
 
     let got = linalg::inner_product(&needles, &vector);
-
-
-   
-    
-
 }
 
-impl <F:Field, const R: usize, const N: usize> AesGCMCipherWitness<F,R,N> {
-    pub fn new(iv: [u8; 12], key: [u8; 16], plain_text: &[u8], icb_opening: F, plain_text_openings: Vec<F>, key_opening:F)->Self {
+impl<F: Field, const R: usize, const N: usize> AesGCMCipherWitness<F, R, N> {
+    pub fn new(
+        iv: [u8; 12],
+        key: [u8; 16],
+        plain_text: &[u8],
+        icb_opening: F,
+        plain_text_openings: Vec<F>,
+        key_opening: F,
+    ) -> Self {
         let traces = AesGCMCipherTrace::new(key, iv, plain_text);
         let icb = AesGCMCounter::create_icb(iv);
         let icb_witness = AesCipherWitness::new(icb.make_counter(), &key, icb_opening, key_opening);
 
-        assert!(plain_text.len() % 16 == 0); 
-        let n_blocks  = plain_text.len()/ 16; 
+        assert!(plain_text.len() % 16 == 0);
+        let n_blocks = plain_text.len() / 16;
 
-        //Need to figure out if there even is a plain text opening for the icb block 
-        assert!(n_blocks == plain_text_openings.len()-1); 
+        //Need to figure out if there even is a plain text opening for the icb block
+        assert!(n_blocks == plain_text_openings.len() - 1);
 
-        let mut block_witnesses: Vec<AesGCMCipherBlockWitness<F, R, N>> = Vec::new(); 
+        let mut block_witnesses: Vec<AesGCMCipherBlockWitness<F, R, N>> = Vec::new();
 
-        for i in 0..n_blocks { 
-            block_witnesses.push(AesGCMCipherBlockWitness::new(traces.blocks[i].counter, key.as_slice(), AesGCMCipherTrace::pt_slice(plain_text, i), key_opening, plain_text_openings[i+1]));
+        for i in 0..n_blocks {
+            block_witnesses.push(AesGCMCipherBlockWitness::new(
+                traces.blocks[i].counter,
+                key.as_slice(),
+                AesGCMCipherTrace::pt_slice(plain_text, i),
+                key_opening,
+                plain_text_openings[i + 1],
+            ));
         }
 
         Self {
-             icb_witness: icb_witness, 
-             block_witnesses: block_witnesses,
+            icb_witness,
+            block_witnesses,
         }
     }
 }
 
-impl<F: Field, const R: usize, const N: usize> MultiBlockWitness<F> for AesGCMCipherWitness<F, R, N> {
+impl<F: Field, const R: usize, const N: usize> MultiBlockWitness<F>
+    for AesGCMCipherWitness<F, R, N>
+{
     fn needles_len(&self) -> usize {
-        let mut total_needles_len = 0; 
+        let mut total_needles_len = 0;
 
-        total_needles_len = total_needles_len + self.icb_witness.needles_len(); 
-        self.block_witnesses.iter().map(|_x| total_needles_len = total_needles_len + _x.needles_len());
-
+        total_needles_len += self.icb_witness.needles_len();
+        for block in &self.block_witnesses {
+            total_needles_len += block.needles_len();
+        }
         total_needles_len
     }
 
-    //Only need to open the key once 
+    //Only need to open the key once
     fn full_witness_opening(&self) -> F {
-        let mut full_witness_opening =F::ZERO; 
+        let mut full_witness_opening = F::ZERO;
 
-        
-        full_witness_opening = full_witness_opening + self.icb_witness.full_witness_opening(); 
-        self.block_witnesses.iter().map(|x| full_witness_opening = full_witness_opening + x.plain_text_opening);
+        full_witness_opening += self.icb_witness.full_witness_opening();
+
+        for block in &self.block_witnesses {
+            full_witness_opening += block.plain_text_opening;
+        }
 
         full_witness_opening
     }
@@ -290,44 +314,50 @@ impl<F: Field, const R: usize, const N: usize> MultiBlockWitness<F> for AesGCMCi
         [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
     ) -> (Vec<F>, Vec<F>, Vec<u64>) {
         let mut needles_vec: Vec<F> = Vec::new();
-        let mut freq: Vec<F> = Vec::new(); 
-        let mut freq_u64: Vec<u64> = Vec::new(); 
 
         let challenges = [c_xor, c_xor2, c_sbox, c_rj2];
 
-        let mut icb_needles_and_freqs = self.icb_witness.compute_needles_and_frequencies(challenges); 
+        let mut icb_needles_and_freqs =
+            self.icb_witness.compute_needles_and_frequencies(challenges);
 
         needles_vec.append(&mut icb_needles_and_freqs.0);
-        freq = icb_needles_and_freqs.1; 
-        freq_u64 = icb_needles_and_freqs.2; 
+        let mut freq = icb_needles_and_freqs.1;
+        let mut freq_u64= icb_needles_and_freqs.2;
 
         for block in self.block_witnesses.clone() {
             let mut block_needles_and_freqs = block.compute_needles_and_frequencies(challenges);
 
             needles_vec.append(&mut block_needles_and_freqs.0);
 
-            freq = freq.iter().zip(block_needles_and_freqs.1.iter()).map(|(&freq, &block)| freq + block).collect();
+            freq = freq
+                .iter()
+                .zip(block_needles_and_freqs.1.iter())
+                .map(|(&freq, &block)| freq + block)
+                .collect();
 
-            freq_u64 = freq_u64.iter().zip(block_needles_and_freqs.2.iter()).map(|(&freq, &block)| freq + block).collect();
+            freq_u64 = freq_u64
+                .iter()
+                .zip(block_needles_and_freqs.2.iter())
+                .map(|(&freq, &block)| freq + block)
+                .collect();
         }
-
 
         (needles_vec, freq, freq_u64)
     }
 
     fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
-        let out: Vec<F> = Vec::new(); 
+        let out: Vec<F> = Vec::new();
         (out, F::ZERO)
     }
 
     fn full_witness(&self) -> Vec<F> {
-        let mut full_witness: Vec<F> = Vec::new(); 
+        let mut full_witness: Vec<F> = Vec::new();
 
         full_witness.append(&mut self.icb_witness.full_witness());
-        self.block_witnesses.iter().map(|x| full_witness.append(&mut x.full_witness()));
-
+        for block in &self.block_witnesses {
+            full_witness.append(&mut block.full_witness());
+        }
+        
         full_witness
-
     }
-
 }

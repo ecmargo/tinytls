@@ -4,19 +4,14 @@
 // use std::slice::range;
 
 use ark_ec::CurveGroup;
-use ark_ff::{Field, PrimeField, Zero};
+use ark_ff::{Field, PrimeField};
 
 use nimue::plugins::ark::*;
 use nimue::ProofResult;
 
-use super::{constrain, linalg, lookup, pedersen, sigma, sumcheck};
-use crate::aes_plain::AesCipherTrace;
-use crate::aes_ks::AesKeySchTrace;
-use crate::aes_gcm::{AesGCMCipherBlockTrace, AesGCMCounter, AesGCMCipherTrace};
+use super::{linalg, lookup, pedersen, sigma, sumcheck};
 use crate::pedersen::CommitmentKey;
-use crate::registry::{aes_keysch_offsets, aes_offsets};
 use crate::traits::{LinProof, Witness};
-use crate::MultiBlockWitness;
 
 pub fn aes_prove<'a, G: CurveGroup, LP: LinProof<G>, const R: usize>(
     merlin: &'a mut Merlin,
