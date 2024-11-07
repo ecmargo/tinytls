@@ -61,11 +61,7 @@ pub fn aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
     //For now just try to write the new sbox and  xor stuff dont worry about the round keys
 }
 
-//Need to create a witness expansion function splitting everything into upper and lower 4bits -> look into yale representation,
-//instead of
-
-//assume witness is 2*size
-pub fn vec_cipher_sbox<F: Field, const R: usize>(selector_vec: &[F], c_sbox: F) -> Vec<Vec<F>> {
+pub fn vec_cipher_sbox<F: Field, const R: usize>(selector_vec: &[F], c_sbox: F) -> (Vec<F>, Vec<usize>, Vec<usize>, usize) {
     let regions = registry::aes_gcm_block_offsets::<R>();
 
     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
@@ -75,24 +71,37 @@ pub fn vec_cipher_sbox<F: Field, const R: usize>(selector_vec: &[F], c_sbox: F) 
     let mut input;
     let mut output;
 
-    let mut selector_matrix: Vec<Vec<F>> = Vec::new(); 
+    let mut v: Vec<F> = Vec::new();
+    let mut idx: Vec<usize> = Vec::new();
+    let mut round_state: Vec<usize> = Vec::new();
+
+    let mut counter = 0;
 
     //Structure as a Vec<Vec<F>> where you push after each inner iteration
     for round in 0..R - 1 {
         for i in 0..16 {
-            let mut select = selector_vec.to_vec();
             let s_row_pos = 16 * round + s_row[i] as usize;
             let s_box_pos = 16 * round + i;
             input = (regions.start + s_row_pos) * 2;
             output = (regions.s_box + s_box_pos) * 2;
-            select[input] = F::ONE;
-            select[input + 1] = high;
-            select[output] = c_sbox;
-            select[output + 1] = c_sbox * high;
-            selector_matrix.push(select.to_vec());
+
+            v.push(F::ONE); 
+            v.push(high); 
+            v.push(c_sbox);
+            v.push(c_sbox*high);
+
+            idx.push(input);
+            idx.push(input + 1);
+            idx.push(output);
+            idx.push(output + 1);
+
+            let c = [counter; 4];
+            round_state.extend_from_slice(&c);
+
+            counter += 1;
         }
     }
-    selector_matrix
+    (v, idx, round_state, counter)
 }
 
 #[test]
@@ -112,7 +121,7 @@ fn test_xi_sbox() {
         0xE7u8, 0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69,
         0x0C,
     ];
-    
+
     let c_sbox = F::rand(rng);
 
     let witness = AesCipherWitness::<F, 11, 4>::new(message, &key, F::zero(), F::zero());
@@ -125,13 +134,22 @@ fn test_xi_sbox() {
 
     assert_eq!(regions.witness_len * 2, dst.len());
 
-    let selector_matrix = vec_cipher_sbox::<F, 11>(&mut dst, c_sbox);
-
-    println!("{:?}", &vector_witness[0..1000]);
-
     let wit_f: Vec<F> = vector_witness.into_iter().map(F::from).collect();
 
-    let output: Vec<F> = selector_matrix.into_iter().map(|select| linalg::inner_product(&select, &wit_f)).collect();
+    let (v, idx, round_state, counter) = vec_cipher_sbox::<F, 11>(&mut dst, c_sbox);
+
+    let mut output: Vec<F> = Vec::new();
+
+    for count in 0..counter { 
+        let round_indices: Vec<usize> = round_state.iter().enumerate().filter(|(_, &rs)| rs == count).map(|(index, _)| index).collect(); 
+
+        let idxs: Vec<usize> = round_indices.iter().map(|&i| idx[i]).collect();
+
+        let select: Vec<F> = round_indices.iter().map(|&i| v[i]).collect();
+        let wits: Vec<F> = idxs.iter().map(|&i| wit_f[i]).collect();
+
+        output.push(linalg::inner_product(&select, &wits));
+    }
 
     let haystack_s_box = (0u8..=255)
         .map(|i| {
