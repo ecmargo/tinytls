@@ -204,6 +204,41 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockW
 
 }
 
+#[test]
+fn test_compute_needles_and_freq_single_block(){
+    use crate::linalg;
+    type F = ark_curve25519::Fr;
+    use ark_std::{UniformRand, Zero};
+    use hex_literal::hex;
+
+    let rng = &mut rand::thread_rng();
+
+    let plain_text: [u8;16] = hex!("001d0c231287c1182784554ca3a21908");
+    let key: [u8; 16] = hex!("5b9604fe14eadba931b0ccf34843dab9");
+    let iv: [u8; 12] = hex!("028318abc1824029138141a2"); 
+    let mut ctr = AesGCMCounter::create_icb(iv); 
+    ctr.count = ctr.count+1;
+
+    // actual length needed is: ceil(log(OFFSETS.cipher_len * 2))
+    let challenges = (0..15).map(|_| F::rand(rng)).collect::<Vec<_>>();
+    let vector = linalg::tensor(&challenges);
+
+    let c_xor = F::rand(rng);
+    let c_xor2 = F::rand(rng);
+    let c_sbox = F::rand(rng);
+    let c_rj2 = F::rand(rng);
+    
+    let witness = AesGCMCipherBlockWitness::<F, 15, 8>::new(ctr, &key, plain_text, F::zero(), F::zero());
+    let (needles, freq, freq_u64) = witness.compute_needles_and_frequencies([c_xor, c_xor2, c_sbox, c_rj2]);
+
+    let got = linalg::inner_product(&needles, &vector);
+
+
+   
+    
+
+}
+
 impl <F:Field, const R: usize, const N: usize> AesGCMCipherWitness<F,R,N> {
     pub fn new(iv: [u8; 12], key: [u8; 16], plain_text: &[u8], icb_opening: F, plain_text_openings: Vec<F>, key_opening:F)->Self {
         let traces = AesGCMCipherTrace::new(key, iv, plain_text);
@@ -234,7 +269,7 @@ impl<F: Field, const R: usize, const N: usize> MultiBlockWitness<F> for AesGCMCi
         let mut total_needles_len = 0; 
 
         total_needles_len = total_needles_len + self.icb_witness.needles_len(); 
-        self.block_witnesses.iter().map(|x| total_needles_len = total_needles_len + x.needles_len());
+        self.block_witnesses.iter().map(|_x| total_needles_len = total_needles_len + _x.needles_len());
 
         total_needles_len
     }

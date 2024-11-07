@@ -185,41 +185,6 @@ pub(super) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnes
     }
 }
 
-// Takes in n_cipher blocks which excludes the initial ICB 
-// pub(super) const fn aes_gcm_cipher_offsets<const R: usize>(n_cipher_blocks: usize) -> AesGCMCipherWitnessRegions {
-//     let start = 0;
-//     let s_box = start + 16 * (R - 1);
-//     // thank Rust for const for loops
-//     let m_col_offset = s_box + 16 * (R - 1);
-//     let m_col_len = 16 * (R - 2);
-//     #[allow(clippy::all)]
-//     let m_col = [
-//         m_col_offset + m_col_len * 0,
-//         m_col_offset + m_col_len * 1,
-//         m_col_offset + m_col_len * 2,
-//         m_col_offset + m_col_len * 3,
-//         m_col_offset + m_col_len * 4,
-//     ];
-//     // let addroundkey_len = 16 * 11;
-//     let message = m_col[4] + m_col_len;
-//     let round_keys = message + 16;
-//     let needles_len =
-//             16 * (R-1) + // s_box
-//             16 * (R-2) + // rj2
-//             16 * (R-2) * 5 * 2 + // m_col xor's
-//             16 * 2 * 2 // addroundkey first and last
-//         ;
-
-//         // pub(super) struct AesGCMCipherWitnessRegions {
-//         //     pub icb: usize,
-//         //     pub round_keys: usize,
-//         //     pub blocks: usize
-//         // }
-
-//         AesGCMCipherWitnessRegions {
-//     }
-// }
-
 pub const AES128REG: AesWitnessRegions = aes_offsets::<11>();
 pub const AES256REG: AesWitnessRegions = aes_offsets::<15>();
 pub const AES128KSREG: AesKeySchWitnessRegions = aes_keysch_offsets::<11, 4>();

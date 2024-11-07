@@ -60,11 +60,24 @@ pub fn aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
 //For now just try to write the new sbox and  xor stuff dont worry about the round keys 
 }
 
-pub fn vec_cipher_sbox<F:Field, const R: usize>(witness: Vec<u8>, c_sbox: F) -> Vec<F> { 
-    let regions = registry::aes_gcm_block_offsets::<R>(); 
-    let in_vec = 
+// pub fn vec_cipher_sbox<F:Field, const R: usize>(witness: Vec<u8>, c_sbox: F) -> Vec<F> { 
+//     let regions = registry::aes_gcm_block_offsets::<R>(); 
+//     let combo_vec = vec![F::zero(); regions.witness_len];
 
-}
+//     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+//     let s_row = aes_utils::shiftrows(identity);
+
+//     for round in 0..R-1 { 
+//         for i in 0..16 {
+//             let input_index = regions.start + (16*round + s_row[i]); 
+//             let output_index = 
+//         }
+//     }
+//     combo_vec
+
+
+
+// }
 
 
 pub fn cipher_sbox<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
