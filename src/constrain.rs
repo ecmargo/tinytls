@@ -57,12 +57,10 @@ pub fn aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
     gcm_final_xor::<F, R>(&mut dst, &src[offset..], c_xor, c_xor2);
     //not including the constant term here because im not sure its needed?
     (dst, constant_term)
-    // src is powers of the evaluation point that we want to do that is transformed to convert a query from the needles vector to on
-    //For now just try to write the new sbox and  xor stuff dont worry about the round keys
 }
 
-pub fn vec_cipher_sbox<F: Field, const R: usize>(selector_vec: &[F], c_sbox: F) -> (Vec<F>, Vec<usize>, Vec<usize>, usize) {
-    let regions = registry::aes_gcm_block_offsets::<R>();
+pub fn vec_cipher_sbox<F: Field, const R: usize>(c_sbox: F) -> (Vec<F>, Vec<usize>, Vec<usize>, usize) {
+    let regions = registry::aes_offsets::<R>();
 
     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
     let s_row = aes_utils::shiftrows(identity);
@@ -128,15 +126,9 @@ fn test_xi_sbox() {
 
     let vector_witness = AesCipherWitness::<F, 11, 4>::full_witness(&witness);
 
-    let regions = registry::aes_offsets::<11>();
-
-    let mut dst = vec![F::zero(); vector_witness.len()];
-
-    assert_eq!(regions.witness_len * 2, dst.len());
-
     let wit_f: Vec<F> = vector_witness.into_iter().map(F::from).collect();
 
-    let (v, idx, round_state, counter) = vec_cipher_sbox::<F, 11>(&mut dst, c_sbox);
+    let (v, idx, round_state, counter) = vec_cipher_sbox::<F, 11>(c_sbox);
 
     let mut output: Vec<F> = Vec::new();
 
@@ -179,6 +171,112 @@ pub fn cipher_sbox<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
             dst[(reg.s_box + s_box_pos) * 2 + 1] += r * c_hi;
         }
     }
+}
+
+pub fn vec_cipher_rj2<F: Field, const R: usize>(c_rj2: F) -> (Vec<F>, Vec<usize>, Vec<usize>, usize) {
+    let regions = registry::aes_offsets::<R>();
+
+    let high = F::from(16);
+    let mut input;
+    let mut output;
+
+    let mut v: Vec<F> = Vec::new();
+    let mut idx: Vec<usize> = Vec::new();
+    let mut round_state: Vec<usize> = Vec::new();
+
+    let mut counter = 0;
+
+    for round in 0..R - 1 {
+        for i in 0..16 {
+            let pos = 16 * round + i;
+            input = (regions.s_box + pos) * 2;
+            output = (regions.m_col[0] + pos) * 2;
+
+            v.push(F::ONE); 
+            v.push(high); 
+            v.push(c_rj2);
+            v.push(c_rj2*high);
+
+            idx.push(input);
+            idx.push(input + 1);
+            idx.push(output);
+            idx.push(output + 1);
+
+            let c = [counter; 4];
+            round_state.extend_from_slice(&c);
+
+            counter += 1;
+        }
+    }
+    (v, idx, round_state, counter)
+}
+
+#[test]
+fn test_rj2() {
+    use crate::linalg;
+    type F = ark_curve25519::Fr;
+    use crate::witness_plain::AesCipherWitness;
+    use ark_std::{UniformRand, Zero};
+
+    let rng = &mut rand::thread_rng();
+
+    let message = [
+        0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69, 0x0C,
+        0xE7,
+    ];
+    let key = [
+        0xE7u8, 0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69,
+        0x0C,
+    ];
+
+    let c_rj2 = F::ONE;
+    //F::rand(rng);
+
+    let haystack_r2j = (0u8..=255)
+    .map(|i| {
+        let x = i;
+        let y = aes_utils::RJ2[x as usize];
+        F::from(x) + c_rj2 * F::from(y)
+    })
+    .collect::<Vec<_>>();
+    // println!("{:?}", haystack_r2j);
+
+    let witness = AesCipherWitness::<F, 11, 4>::new(message, &key, F::zero(), F::zero());
+
+    let vector_witness = AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+
+    let wit_f: Vec<F> = vector_witness.into_iter().map(F::from).collect();
+
+    let (v, idx, round_state, counter) = vec_cipher_rj2::<F, 11>(c_rj2);
+
+    // println!("{:?}", v);
+    // println!("{:?}", idx);
+    // println!("{:?}", round_state);
+
+    let mut output: Vec<F> = Vec::new();
+
+    for count in 0..counter{ 
+        let round_indices: Vec<usize> = round_state.iter().enumerate().filter(|(_, &rs)| rs == count).map(|(index, _)| index).collect(); 
+
+        let idxs: Vec<usize> = round_indices.iter().map(|&i| idx[i]).collect();
+
+        let select: Vec<F> = round_indices.iter().map(|&i| v[i]).collect();
+        let wits: Vec<F> = idxs.iter().map(|&i| wit_f[i]).collect();
+
+        let ip = linalg::inner_product(&select, &wits); 
+        if !haystack_r2j.contains(&ip) {
+            println!("Count: {:?}", count);
+            println!("{:?}", ip);
+             println!("{:?}", idxs);
+            println!("{:?}", select);
+            println!("{:?}", wits);
+        }
+        output.push(linalg::inner_product(&select, &wits));
+    }
+    // println!("{:?}", output);
+
+
+    assert!(output.into_iter().all(|x|(haystack_r2j.contains(&x))));
 }
 
 pub fn cipher_rj2<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
