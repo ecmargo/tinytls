@@ -141,6 +141,7 @@ pub fn vec_cipher_rj2<F: Field, const R: usize>(c_rj2: F) -> (Vec<F>, Vec<usize>
     let regions = registry::aes_offsets::<R>();
 
     let high = F::from(16);
+    let offset = 16*(R-1);
     let mut input;
     let mut output;
 
@@ -441,7 +442,6 @@ fn test_xi_sbox() {
 
 #[test]
 fn test_rj2() {
-    use crate::linalg;
     type F = ark_curve25519::Fr;
     use crate::witness_plain::AesCipherWitness;
     use ark_std::{UniformRand, Zero};
@@ -472,9 +472,13 @@ fn test_rj2() {
 
     let vector_witness = AesCipherWitness::<F, 11, 4>::full_witness(&witness);
 
+    let offset = 16 * 10;
+
+    let sub = &vector_witness[offset..];
+
     let (v, idx, round_state) = vec_cipher_rj2::<F, 11>(c_rj2);
 
-    let output: Vec<F> = combine_yale_to_needles(round_state, idx, v, vector_witness);
+    let output: Vec<F> = combine_yale_to_needles(round_state, idx, v, sub.to_vec());
 
     assert!(output.into_iter().all(|x|(haystack_r2j.contains(&x))));
 }
