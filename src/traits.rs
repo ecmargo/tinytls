@@ -7,7 +7,7 @@ use nimue::{Arthur, Merlin};
 use nimue::{DuplexHash, ProofResult};
 
 use crate::pedersen::CommitmentKey;
-use crate::registry;
+use crate::witness::registry;
 
 pub trait TinybearIO<G: CurveGroup>: SumcheckIO<G> + MulProofIO<G> + LinProofIO<G> + Sized {
     fn add_aes_statement(self) -> Self;

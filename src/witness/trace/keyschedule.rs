@@ -1,4 +1,4 @@
-use crate::aes_utils::{sbox, xor, RC};
+use super::utils::{sbox, xor, RC};
 
 #[inline]
 pub fn aes128_keyschedule(key: &[u8; 16]) -> [[u8; 16]; 11] {
@@ -11,7 +11,7 @@ pub fn aes256_keyschedule(key: &[u8; 32]) -> [[u8; 16]; 15] {
 }
 
 /// Naive implementation of AES's keyschedule.
-pub(crate) fn keyschedule<const R: usize, const N: usize>(key: &[u8]) -> [[u8; 16]; R] {
+pub fn keyschedule<const R: usize, const N: usize>(key: &[u8]) -> [[u8; 16]; R] {
     let trace = AesKeySchTrace::<R, N>::new(key);
 
     let mut round_keys = [[0u8; 16]; R];

@@ -1,12 +1,10 @@
 //! See Figure 8 in the paper to learn how this protocol works
 #![allow(non_snake_case)]
 
-// use std::slice::range;
-
-use super::{constrain, lookup};
-use crate::aes_ks::{self, AesKeySchTrace};
-use crate::registry::aes_keysch_offsets;
 use crate::traits::Witness;
+use crate::witness::registry::aes_keysch_offsets;
+use crate::witness::trace::keyschedule::{self, AesKeySchTrace};
+use crate::{constrain, lookup};
 use ark_ff::Field;
 
 pub struct AesKeySchWitness<F: Field, const R: usize, const N: usize> {
@@ -72,7 +70,7 @@ impl<F: Field, const R: usize, const N: usize> AesKeySchWitness<F, R, N> {
         witness_xor
     }
 
-    pub fn vectorize_keysch(witness: &aes_ks::AesKeySchTrace<R, N>) -> Vec<u8> {
+    pub fn vectorize_keysch(witness: &keyschedule::AesKeySchTrace<R, N>) -> Vec<u8> {
         let mut w = Vec::<u8>::new();
         let registry = aes_keysch_offsets::<R, N>();
 

@@ -1,6 +1,6 @@
 use ark_ff::Field;
 
-use crate::aes_utils;
+use crate::witness::trace::utils;
 
 //In paper frequencies is the vector M
 
@@ -92,14 +92,14 @@ pub fn compute_haystack<F: Field>(
     let haystack_s_box = (0u8..=255)
         .map(|i| {
             let x = i;
-            let y = aes_utils::SBOX[x as usize];
+            let y = utils::SBOX[x as usize];
             F::from(x) + r_sbox * F::from(y)
         })
         .collect::<Vec<_>>();
     let haystack_r2j = (0u8..=255)
         .map(|i| {
             let x = i;
-            let y = aes_utils::RJ2[x as usize];
+            let y = utils::RJ2[x as usize];
             F::from(x) + r_rj2 * F::from(y)
         })
         .collect::<Vec<_>>();

@@ -1,13 +1,7 @@
 #![forbid(unsafe_code)]
 
-/// Basic AES GCM implementation.
-pub mod aes_gcm;
-/// Basic AES implementation (key schedule).
-pub mod aes_ks;
-/// Basic AES implementation.
-pub mod aes_plain;
-/// Common AES functionalities.
-pub mod aes_utils;
+pub mod witness;
+
 /// AES keyschedule and cipher constraints.
 mod constrain;
 /// Interface functions publicly exposed.
@@ -20,8 +14,6 @@ mod lookup;
 pub mod pedersen;
 /// Prover module.
 mod prover;
-/// Helper module for the prover and verifier.
-mod registry;
 /// Core sigma protocols sub-protocols.
 pub mod sigma;
 /// Core sumcheck sub-protocol.
@@ -38,9 +30,5 @@ mod umsm;
 mod verifier;
 /// Witness gen module - GCM .
 mod witness_gcm;
-/// Witness gen module - KS .
-mod witness_ks;
-/// Witness gen module - AES .
-mod witness_plain;
 
 pub use exports::*;

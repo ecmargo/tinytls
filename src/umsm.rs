@@ -1,6 +1,6 @@
 use ark_ec::CurveGroup;
 
-/// Simpler pippenger for u8 scalars. - Edit to work with 64
+/// Simpler pippenger for u8 scalars.
 pub fn u8msm<G: CurveGroup>(bases: &[G::Affine], scalars: &[u8]) -> G {
     let mut buckets = [G::zero(); 8];
     for (base, scalar) in bases.iter().zip(scalars.iter()) {

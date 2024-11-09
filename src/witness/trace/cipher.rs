@@ -1,5 +1,8 @@
-use crate::aes_ks::{aes128_keyschedule, aes256_keyschedule, keyschedule};
-use crate::aes_utils::{mixcolumns, rotate_right_inplace, sbox, shiftrows, xor, RJ2};
+use super::keyschedule::{aes128_keyschedule, aes256_keyschedule, keyschedule};
+use super::utils::{mixcolumns, rotate_right_inplace, sbox, shiftrows, xor, RJ2};
+
+#[cfg(test)]
+use hex_literal::hex;
 
 fn aes_round(mut state: [u8; 16], round_key: [u8; 16]) -> [u8; 16] {
     // Note: shiftrows before sbox
@@ -161,9 +164,9 @@ pub fn aes_round_trace(state: [u8; 16], key: [u8; 16]) -> RoundTrace {
 
 #[test]
 fn test_aes_round_trace() {
-    let state = *b"\xc8\x16w\xbc\x9bz\xc9;%\x02y\x92\xb0&\x19\x96";
-    let expected = *b"\xc6/\xe1\t\xf7^\xed\xc3\xccy9]\x84\xf9\xcf]";
-    let round_key = *b"^9\x0f}\xf7\xa6\x92\x96\xa7U=\xc1\n\xa3\x1fk";
+    let state = hex!("c81677bc9b7ac93b25027992b0261996");
+    let expected = hex!("c62fe109f75eedc3cc79395d84f9cf5d");
+    let round_key = hex!("5e390f7df7a69296a7553dc10aa31f6b");
 
     let got = aes_round_trace(state, round_key);
     let naive = aes_round(state, round_key);
@@ -174,11 +177,11 @@ fn test_aes_round_trace() {
 
 #[test]
 fn test_aes128() {
-    let message: [u8; 16] = *b"\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb\xcc\xdd\xee\xff";
-    let key: [u8; 16] = *b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
+    let message: [u8; 16] = hex!("00112233445566778899aabbccddeeff");
+    let key: [u8; 16] = hex!("000102030405060708090a0b0c0d0e0f");
 
     let keys = aes128_keyschedule(&key);
-    let expected = *b"\x00\x10 0@P`p\x80\x90\xa0\xb0\xc0\xd0\xe0\xf0";
+    let expected = hex!("00102030405060708090a0b0c0d0e0f0");
     let state = xor(message, keys[0]);
     assert_eq!(
         expected,
@@ -189,7 +192,7 @@ fn test_aes128() {
     );
 
     let state = sbox(state);
-    let expected = *b"c\xca\xb7\x04\tS\xd0Q\xcd`\xe0\xe7\xbap\xe1\x8c";
+    let expected = hex!("63cab7040953d051cd60e0e7ba70e18c");
     assert_eq!(
         expected,
         state,
@@ -199,7 +202,7 @@ fn test_aes128() {
     );
 
     let state = shiftrows(state);
-    let expected = *b"cS\xe0\x8c\t`\xe1\x04\xcdp\xb7Q\xba\xca\xd0\xe7";
+    let expected = hex!("6353e08c0960e104cd70b751bacad0e7");
     assert_eq!(
         expected,
         state,
@@ -209,7 +212,7 @@ fn test_aes128() {
     );
 
     let state = mixcolumns(state);
-    let expected = *b"_rd\x15W\xf5\xbc\x92\xf7\xbe;)\x1d\xb9\xf9\x1a";
+    let expected = hex!("5f72641557f5bc92f7be3b291db9f91a");
     assert_eq!(
         expected,
         state,
@@ -219,7 +222,7 @@ fn test_aes128() {
     );
 
     let state = xor(state, keys[1]);
-    let expected = *b"\x89\xd8\x10\xe8\x85Z\xceh-\x18C\xd8\xcb\x12\x8f\xe4";
+    let expected = hex!("89d810e8855ace682d1843d8cb128fe4");
     assert_eq!(
         expected,
         state,
@@ -230,7 +233,7 @@ fn test_aes128() {
 
     let state = sbox(state);
     let state = shiftrows(state);
-    let expected = *b"\xa7\xbe\x1ai\x97\xads\x9b\xd8\xc9\xcaE\x1fa\x8ba";
+    let expected = hex!("a7be1a6997ad739bd8c9ca451f618b61");
     assert_eq!(
         expected,
         state,
@@ -240,7 +243,7 @@ fn test_aes128() {
     );
 
     let state = mixcolumns(state);
-    let expected = *b"\xff\x87\x96\x841\xd8jQdQQ\xfaw:\xd0\t";
+    let expected = hex!("ff87968431d86a51645151fa773ad009");
     assert_eq!(
         expected,
         state,
@@ -250,7 +253,7 @@ fn test_aes128() {
     );
 
     let state = xor(state, keys[2]);
-    let expected = *b"I\x15Y\x8fU\xe5\xd7\xa0\xda\xca\x94\xfa\x1f\nc\xf7";
+    let expected = hex!("4915598f55e5d7a0daca94fa1f0a63f7");
     assert_eq!(
         expected,
         state,
@@ -260,7 +263,7 @@ fn test_aes128() {
     );
 
     let got = aes128(message, key);
-    let expected: [u8; 16] = *b"i\xc4\xe0\xd8j{\x040\xd8\xcd\xb7\x80p\xb4\xc5Z";
+    let expected: [u8; 16] = hex!("69c4e0d86a7b0430d8cdb78070b4c55a");
     assert_eq!(got, expected);
     let witness = AesCipherTrace::new_aes128(message, key);
     assert_eq!(witness.output, expected);
@@ -268,32 +271,19 @@ fn test_aes128() {
 
 #[test]
 fn test_aes256() {
-    let message = *b"\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb\xcc\xdd\xee\xff";
-    let key = *b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\
-               \x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f";
-    let expected = *b"\x8e\xa2\xb7\xca\x51\x67\x45\xbf\xea\xfc\x49\x90\x4b\x49\x60\x89";
+    let message: [u8; 16] = hex!("00112233445566778899aabbccddeeff");
+    let key: [u8; 32] = hex!("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+    let expected = hex!("8ea2b7ca516745bfeafc49904b496089");
 
     let round_keys = aes256_keyschedule(&key);
     let state = xor(message, round_keys[0]);
-    assert_eq!(
-        state,
-        *b"\x00\x10\x20\x30\x40\x50\x60\x70\x80\x90\xa0\xb0\xc0\xd0\xe0\xf0"
-    );
+    assert_eq!(state, hex!("00102030405060708090a0b0c0d0e0f0"));
     let state = aes_round(state, round_keys[1]);
-    assert_eq!(
-        state,
-        *b"\x4f\x63\x76\x06\x43\xe0\xaa\x85\xef\xa7\x21\x32\x01\xa4\xe7\x05"
-    );
+    assert_eq!(state, hex!("4f63760643e0aa85efa7213201a4e705"));
     let state = shiftrows(sbox(state));
-    assert_eq!(
-        state,
-        *b"\x84\xe1\xfd\x6b\x1a\x5c\x94\x6f\xdf\x49\x38\x97\x7c\xfb\xac\x23"
-    );
+    assert_eq!(state, hex!("84e1fd6b1a5c946fdf4938977cfbac23"));
     let state = mixcolumns(state);
-    assert_eq!(
-        state,
-        *b"\xbd\x2a\x39\x5d\x2b\x6a\xc4\x38\xd1\x92\x44\x3e\x61\x5d\xa1\x95"
-    );
+    assert_eq!(state, hex!("bd2a395d2b6ac438d192443e615da195"));
 
     let got = aes256(message, key);
     assert_eq!(got, expected);
@@ -301,11 +291,11 @@ fn test_aes256() {
 
 #[test]
 fn test_aes128_wiring() {
-    let message: [u8; 16] = *b"\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb\xcc\xdd\xee\xff";
-    let key: [u8; 16] = *b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
+    let message: [u8; 16] = hex!("00112233445566778899aabbccddeeff");
+    let key: [u8; 16] = hex!("000102030405060708090a0b0c0d0e0f");
 
     let got = aes128(message, key);
-    let expected: [u8; 16] = *b"i\xc4\xe0\xd8j{\x040\xd8\xcd\xb7\x80p\xb4\xc5Z";
+    let expected: [u8; 16] = hex!("69c4e0d86a7b0430d8cdb78070b4c55a");
     assert_eq!(got, expected);
     let witness = AesCipherTrace::new_aes128(message, key);
     assert_eq!(witness.output, expected);

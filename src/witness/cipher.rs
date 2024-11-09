@@ -3,16 +3,15 @@
 
 use ark_ff::Field;
 
-use super::lookup;
-use crate::aes_plain::AesCipherTrace;
-use crate::registry::aes_offsets;
+use super::registry::aes_offsets;
+use super::trace::{cipher, keyschedule};
+use crate::lookup;
 use crate::traits::Witness;
-use crate::{aes_ks, aes_plain};
 
 //See about moving the round keys once to the very end instead of the very front
 #[derive(Clone)]
 pub struct AesCipherWitness<F: Field, const R: usize, const N: usize> {
-    pub trace: AesCipherTrace,
+    pub trace: cipher::AesCipherTrace,
     pub witness_vec: Vec<u8>,
     pub message: [u8; 16],
     pub round_keys: [[u8; 16]; R],
@@ -23,8 +22,8 @@ pub struct AesCipherWitness<F: Field, const R: usize, const N: usize> {
 impl<F: Field, const R: usize, const N: usize> AesCipherWitness<F, R, N> {
     pub fn new(message: [u8; 16], key: &[u8], message_opening: F, key_opening: F) -> Self {
         assert_eq!(key.len(), N * 4);
-        let round_keys = aes_ks::keyschedule::<R, N>(key);
-        let trace = aes_plain::aes_trace(message, &round_keys);
+        let round_keys = keyschedule::keyschedule::<R, N>(key);
+        let trace = cipher::aes_trace(message, &round_keys);
         let witness_vec = Self::vectorize_witness(&trace);
         Self {
             trace,
@@ -42,9 +41,9 @@ impl<F: Field, const R: usize, const N: usize> AesCipherWitness<F, R, N> {
     /// turns it into a continuous vector.
     /// Each 8-bit byte from the witness is split into two 4-bit parts to simplify
     /// the lookup operations.
-    pub(crate) fn vectorize_witness(witness: &aes_plain::AesCipherTrace) -> Vec<u8> {
+    pub(crate) fn vectorize_witness(witness: &cipher::AesCipherTrace) -> Vec<u8> {
         let mut w = Vec::<u8>::new();
-        let registry = crate::registry::aes_offsets::<R>();
+        let registry = crate::witness::registry::aes_offsets::<R>();
 
         assert_eq!(registry.start, w.len());
         w.extend(&witness.start);
@@ -217,7 +216,7 @@ fn test_trace_to_needles_map() {
     let (needles, _, _) = witness.compute_needles_and_frequencies([c_xor, c_xor2, c_sbox, c_rj2]);
     let got = linalg::inner_product(&needles, &vector);
 
-    let round_keys = aes_ks::aes256_keyschedule(&key);
+    let round_keys = keyschedule::aes256_keyschedule(&key);
 
     // these elements will be commited to a separate vector.
     let message = witness.message.iter().flat_map(|x| [x & 0xf, x >> 4]);

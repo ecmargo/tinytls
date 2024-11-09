@@ -7,9 +7,9 @@ use crate::pedersen::CommitmentKey;
 use crate::prover::aes_prove;
 use crate::sigma::{self, SigmaProof};
 use crate::verifier::{aes_verify, AesCipherInstance, AeskeySchInstance};
-use crate::witness_ks::AesKeySchWitness;
-use crate::witness_plain::AesCipherWitness;
-use crate::{aes_ks, registry, umsm};
+use crate::witness::cipher::AesCipherWitness;
+use crate::witness::keyschedule::AesKeySchWitness;
+use crate::{witness::registry, umsm};
 
 pub use crate::traits::*;
 
@@ -135,7 +135,11 @@ pub fn commit_aes128_key<G: CurveGroup>(
     ck: &CommitmentKey<G>,
     key: &[u8; 16],
 ) -> (G, G::ScalarField) {
-    commit_round_keys(csrng, ck, &aes_ks::aes128_keyschedule(key))
+    commit_round_keys(
+        csrng,
+        ck,
+        &crate::witness::aes128_keyschedule(key),
+    )
 }
 
 pub fn commit_aes256_keys<G: CurveGroup>(
@@ -143,7 +147,11 @@ pub fn commit_aes256_keys<G: CurveGroup>(
     ck: &CommitmentKey<G>,
     key: &[u8; 32],
 ) -> (G, G::ScalarField) {
-    commit_round_keys(csrng, ck, &aes_ks::aes256_keyschedule(key))
+    commit_round_keys(
+        csrng,
+        ck,
+        &crate::witness::aes256_keyschedule(key),
+    )
 }
 
 fn commit_round_keys<G: CurveGroup, const R: usize>(
