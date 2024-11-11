@@ -83,14 +83,6 @@ pub fn mixcolumns(mut state: [u8; 16]) -> [u8; 16] {
     state
 }
 
-fn aes_round(mut state: [u8; 16], round_key: [u8; 16]) -> [u8; 16] {
-    // Note: shiftrows before sbox
-    state = shiftrows(state);
-    state = sbox(state);
-    state = mixcolumns(state);
-    xor(state, round_key)
-}
-
 /// Transpose a vector of states in-place.
 pub fn transpose_inplace<T>(list: &mut [T]) {
     for chunk in list.chunks_mut(16) {
@@ -111,8 +103,9 @@ pub fn rotate_right_inplace<T>(state: &mut [T], times: usize) {
 
 #[test]
 fn test_mixcolumns() {
-    let state = *b"63\x9dP\xf9\xb59&\x9f,\t-\xc4@m#";
-    let expected = *b"\xf4\xbc\xd4T2\xe5T\xd0u\xf1\xd6\xc5\x1d\xd0;<";
+    use hex_literal::hex;
+    let state = hex!("36339d50f9b539269f2c092dc4406d23");
+    let expected = hex!("f4bcd45432e554d075f1d6c51dd03b3c");
     let got = mixcolumns(state);
 
     assert_eq!(got, expected);

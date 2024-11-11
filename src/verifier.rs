@@ -8,7 +8,7 @@ use nimue::{Arthur, ProofResult};
 use crate::linalg::powers;
 use crate::pedersen::CommitmentKey;
 use crate::traits::{Instance, LinProof};
-use crate::{constrain, linalg, lookup, registry, sigma, sumcheck};
+use crate::{constrain, linalg, lookup, sigma, sumcheck, witness::registry};
 
 pub fn aes_verify<G, LP: LinProof<G>, const R: usize>(
     arthur: &mut Arthur,

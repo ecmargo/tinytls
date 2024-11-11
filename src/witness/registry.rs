@@ -1,5 +1,5 @@
 /// Regions in the AES witness, parametrized by the number of rounds.
-pub(super) struct AesWitnessRegions {
+pub struct AesWitnessRegions {
     pub start: usize,
     pub s_box: usize,
     pub m_col: [usize; 5],
@@ -9,7 +9,9 @@ pub(super) struct AesWitnessRegions {
     pub needles_len: usize,
 }
 
-pub(super) struct AesGCMBlockWitnessRegions {
+// XXX. remove unused
+#[allow(unused)]
+pub struct AesGCMBlockWitnessRegions {
     pub start: usize,
     pub s_box: usize,
     pub m_col: [usize; 5],
@@ -21,7 +23,7 @@ pub(super) struct AesGCMBlockWitnessRegions {
     pub full_witness_round_keys_location: usize,
 }
 
-pub(super) struct AesKeySchWitnessRegions {
+pub struct AesKeySchWitnessRegions {
     pub s_box: usize,
     pub xor: usize,
     pub round_keys: usize,
@@ -29,7 +31,7 @@ pub(super) struct AesKeySchWitnessRegions {
     pub needles_len: usize,
 }
 
-pub(super) const fn aes_keysch_offsets<const R: usize, const N: usize>() -> AesKeySchWitnessRegions
+pub(crate) const fn aes_keysch_offsets<const R: usize, const N: usize>() -> AesKeySchWitnessRegions
 {
     AesKeySchWitnessRegions {
         s_box: 0,
@@ -73,7 +75,7 @@ pub(super) const fn aes_keysch_offsets<const R: usize, const N: usize>() -> AesK
 ///    (Note: the final AddRoundKey operation is not included involves `.start` and `.m_col[4]`)
 /// - `.message` and `.round_keys`
 ///  denote message and round keys, respectively. They are given as part of the statement.
-pub(super) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
+pub(crate) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
     let start = 0;
     let s_box = start + 16 * (R - 1);
     // thank Rust for const for loops
@@ -118,7 +120,7 @@ pub(super) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
 /// ---------------+
 /// |  .m_col      |
 /// +--------------+
-/// |  .final_xor  |  
+/// |  .final_xor  |
 /// +--------------+
 /// |  .counter    |  <-- from outside
 /// +--------------+
@@ -145,7 +147,7 @@ pub(super) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
 ///    Therefore, it has length 16
 /// - `.counter` and `.plain_text`
 ///  denote counter and plain_text, respectively. They are given as part of the statement.
-pub(super) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnessRegions {
+pub(crate) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnessRegions {
     let start = 0;
     let s_box = start + 16 * (R - 1);
     // thank Rust for const for loops
@@ -167,7 +169,7 @@ pub(super) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnes
             16 * (R-2) + // rj2
             16 * (R-2) * 5 * 2 + // m_col xor's
             16 * 2 * 2 + // addroundkey first and last
-            16 //final xor 
+            16 //final xor
         ;
     let icb_region = aes_offsets::<R>();
     let round_key_loc = icb_region.round_keys;

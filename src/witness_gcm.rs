@@ -1,15 +1,15 @@
 //! See Figure 8 in the paper to learn how this protocol works
 #![allow(non_snake_case)]
 
-// use std::slice::range;
-
 use ark_ff::Field;
 
 use super::lookup;
-use crate::aes_gcm::{self, AesGCMCipherBlockTrace, AesGCMCipherTrace, AesGCMCounter};
-use crate::registry::aes_gcm_block_offsets;
 use crate::traits::Witness;
-use crate::witness_plain::AesCipherWitness;
+use crate::witness::cipher::AesCipherWitness;
+use crate::witness::registry::aes_gcm_block_offsets;
+use crate::witness::trace::aes_gcm::{
+    self, AesGCMCipherBlockTrace, AesGCMCipherTrace, AesGCMCounter,
+};
 use crate::MultiBlockWitness;
 
 #[derive(Default, Clone)]
@@ -56,7 +56,7 @@ impl<F: Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F, R, N>
     pub(crate) fn vectorize_witness(witness: &aes_gcm::AesGCMCipherBlockTrace) -> Vec<u8> {
         let mut w: Vec<u8> =
             AesCipherWitness::<F, R, N>::vectorize_witness(&witness.aes_cipher_trace);
-        let registry = crate::registry::aes_gcm_block_offsets::<R>();
+        let registry = aes_gcm_block_offsets::<R>();
         assert_eq!(registry.final_xor, w.len());
 
         let final_xor: Vec<u8> = witness
@@ -193,9 +193,9 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockW
         (needles, freq, freq_u64)
     }
 
-    fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
-        let aes_output = &self.trace.aes_cipher_trace.output;
-        let final_xor = &self.trace.final_xor;
+    fn trace_to_needles_map(&self, _src: &[F], _r: [F; 4]) -> (Vec<F>, F) {
+        let _aes_output = &self.trace.aes_cipher_trace.output;
+        let _final_xor = &self.trace.final_xor;
         let out: Vec<F> = Vec::new();
         (out, F::ZERO)
     }
@@ -239,10 +239,10 @@ fn test_compute_needles_and_freq_single_block() {
 
     let witness =
         AesGCMCipherBlockWitness::<F, 15, 8>::new(ctr, &key, plain_text, F::zero(), F::zero());
-    let (needles, freq, freq_u64) =
+    let (needles, _freq, _freq_u64) =
         witness.compute_needles_and_frequencies([c_xor, c_xor2, c_sbox, c_rj2]);
 
-    let got = linalg::inner_product(&needles, &vector);
+    let _got = linalg::inner_product(&needles, &vector);
 }
 
 impl<F: Field, const R: usize, const N: usize> AesGCMCipherWitness<F, R, N> {
@@ -322,7 +322,7 @@ impl<F: Field, const R: usize, const N: usize> MultiBlockWitness<F>
 
         needles_vec.append(&mut icb_needles_and_freqs.0);
         let mut freq = icb_needles_and_freqs.1;
-        let mut freq_u64= icb_needles_and_freqs.2;
+        let mut freq_u64 = icb_needles_and_freqs.2;
 
         for block in self.block_witnesses.clone() {
             let mut block_needles_and_freqs = block.compute_needles_and_frequencies(challenges);
@@ -345,7 +345,7 @@ impl<F: Field, const R: usize, const N: usize> MultiBlockWitness<F>
         (needles_vec, freq, freq_u64)
     }
 
-    fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
+    fn trace_to_needles_map(&self, _src: &[F], _r: [F; 4]) -> (Vec<F>, F) {
         let out: Vec<F> = Vec::new();
         (out, F::ZERO)
     }
@@ -357,7 +357,7 @@ impl<F: Field, const R: usize, const N: usize> MultiBlockWitness<F>
         for block in &self.block_witnesses {
             full_witness.append(&mut block.full_witness());
         }
-        
+
         full_witness
     }
 }

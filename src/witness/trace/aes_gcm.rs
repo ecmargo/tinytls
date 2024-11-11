@@ -1,8 +1,8 @@
-use crate::aes_plain::{aes128, AesCipherTrace};
-use crate::aes_utils::xor;
+use crate::witness::trace::cipher::{aes128, AesCipherTrace};
+use crate::witness::trace::utils::xor;
 
 #[derive(Default, Clone, Copy)]
-//Maybe rename this? And modify the new function to support the GHASH option
+// XXX. Maybe rename this? And modify the new function to support the GHASH option
 pub struct AesGCMCounter {
     pub iv: [u8; 12],
     pub count: u32,
@@ -39,7 +39,7 @@ impl AesGCMCipherBlockTrace {
 }
 
 impl AesGCMCounter {
-    //Assumign len(iv) is 96, will deal with hashing later
+    // Assuming len(iv) is 96, will deal with hashing later
     pub fn create_icb(iv: [u8; 12]) -> Self {
         Self { iv, count: 1 }
     }
@@ -61,7 +61,7 @@ impl AesGCMCipherTrace {
 
     pub fn new(key: [u8; 16], iv: [u8; 12], plain_text: &[u8]) -> Self {
         let icb = AesGCMCounter::create_icb(iv);
-        //for right now just assert plain_text is divisible by 16
+        // XXX. for right now just assert plain_text is divisible by 16
         assert!(plain_text.len() % 16 == 0);
         let n_blocks = plain_text.len() / 16;
         let mut blocks: Vec<AesGCMCipherBlockTrace> = Vec::new();

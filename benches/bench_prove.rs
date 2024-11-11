@@ -75,7 +75,7 @@ fn bench_aes128_verify(c: &mut Criterion) {
 
     let (message_com, message_opening) = commit_aes128_message(rng, &ck, message);
     let (round_keys_com, key_opening) = commit_aes128_key(rng, &ck, &key);
-    let ctx = aes_plain::aes128(message, key);
+    let ctx = witness::aes128(message, key);
 
     c.bench_function("aes128/verify", |b| {
         let iop = IOPattern::new("benchmark-tinybear-aes128");
@@ -115,7 +115,7 @@ fn bench_aes256_verify(c: &mut Criterion) {
 
     let (message_com, message_opening) = commit_aes256_message(rng, &ck, message);
     let (round_keys_com, key_opening) = commit_aes256_keys(rng, &ck, &key);
-    let ctx = aes_plain::aes256(message, key);
+    let ctx = witness::aes256(message, key);
 
     c.bench_function("aes256/verify", |b| {
         let iop = IOPattern::new("benchmark-tinybear-aes256");
