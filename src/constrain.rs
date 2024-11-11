@@ -1,6 +1,7 @@
-use ark_ff::{AdditiveGroup, Field};
-use crate::{linalg, lookup};
-use crate::{aes_utils, registry, Witness};
+use crate::linalg;
+use crate::witness::trace::utils::sbox;
+use crate::witness::{registry, trace::utils};
+use ark_ff::Field;
 
 pub fn aes_trace_to_needles<F: Field, const R: usize>(
     output: &[u8; 16],
@@ -62,8 +63,8 @@ pub fn aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
 pub fn combine_yale_to_needles<F: Field>(round_states: Vec<usize>, idx: Vec<usize>, selectors: Vec<F>, witness: Vec<F>)->Vec<F> {
     let mut output: Vec<F> = Vec::new();
 
-    for count in 0..round_states[round_states.len()-1]{ 
-        let round_indices: Vec<usize> = round_states.iter().enumerate().filter(|(_, &rs)| rs == count).map(|(index, _)| index).collect(); 
+    for count in 0..round_states[round_states.len()-1]{
+        let round_indices: Vec<usize> = round_states.iter().enumerate().filter(|(_, &rs)| rs == count).map(|(index, _)| index).collect();
 
         let idxs: Vec<usize> = round_indices.iter().map(|&i| idx[i]).collect();
 
@@ -99,8 +100,8 @@ pub fn vec_cipher_sbox<F: Field, const R: usize>(c_sbox: F) -> (Vec<F>, Vec<usiz
             input = (regions.start + s_row_pos) * 2;
             output = (regions.s_box + s_box_pos) * 2;
 
-            v.push(F::ONE); 
-            v.push(high); 
+            v.push(F::ONE);
+            v.push(high);
             v.push(c_sbox);
             v.push(c_sbox*high);
 
@@ -156,8 +157,8 @@ pub fn vec_cipher_rj2<F: Field, const R: usize>(c_rj2: F) -> (Vec<F>, Vec<usize>
             input = (regions.s_box + pos) * 2;
             output = (regions.m_col[0] + pos) * 2;
 
-            v.push(F::ONE); 
-            v.push(high); 
+            v.push(F::ONE);
+            v.push(high);
             v.push(c_rj2);
             v.push(c_rj2*high);
 
@@ -236,7 +237,7 @@ pub fn vec_cipher_mcol<F: Field, const R: usize>(c_xor1: F, c_xor2: F) -> (Vec<F
     aes_utils::rotate_right_inplace(&mut aux_m_col[3], 3);
 
     let high = F::from(16);
-    
+
     let mut v: Vec<F> = Vec::new();
     let mut idx: Vec<usize> = Vec::new();
     let mut round_state: Vec<usize> = Vec::new();
@@ -258,9 +259,9 @@ pub fn vec_cipher_mcol<F: Field, const R: usize>(c_xor1: F, c_xor2: F) -> (Vec<F
                 let input_r = (regions.m_col[k+1] + pos) * 2;
                 let outout = (ys_offset + ys_pos) * 2;
 
-                v.push(F::ONE); 
+                v.push(F::ONE);
                 v.push(c_xor2);
-                v.push(F::ONE); 
+                v.push(F::ONE);
                 v.push(c_xor2);
                 v.push(c_xor1);
                 v.push(c_xor1);
@@ -456,6 +457,47 @@ pub fn ks_lin_xor_map<F: Field, const R: usize, const N: usize>(
     // at this point,
     // count = 3 * (R-1) * 4 + (R-1) * 4
     constant_term
+}
+
+
+struct SparseMatrix<F: Field> {
+    pub val: Vec<F>,
+    pub row: Vec<usize>,
+    pub col: Vec<usize>,
+}
+
+impl<F: Field> SparseMatrix<F> {
+    pub fn new() -> Self {
+        Self {
+            val: Vec::new(),
+            row: Vec::new(),
+            col: Vec::new(),
+        }
+    }
+}
+
+fn matrix_sbox<F: Field>(input_offset: usize, output_offset: usize, c: F) -> SparseMatrix<F>{
+    let mut  ret = SparseMatrix::new();
+    let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    let s_row = utils::shiftrows(identity);
+
+    let rows = (0..16).map(|i| [i; 4]).flatten().collect::<Vec<_>>();
+    let cols = (0..16).map(|i|
+        [s_row[i] + input_offset,
+        i + output_offset
+    ]).flatten().collect::<Vec<_>>();
+    let vals = (0..16).map(|i| vec![F::ONE, F::from(16), c, c * F::from(16)]).flatten().collect::<Vec<_>>();
+    return SparseMatrix{val: vals, row: rows, col: cols};
+}
+
+#[test]
+fn test_call_foo() {
+
+    let state = [0u8; 8];
+    let output_state = sbox(state);
+    let witness = vec![0u8; 32];
+    let c_sbox = ark_curve25519::Fr::ZERO;
+    let matrix_sbox = matrix_sbox::<F>(input_block_start, output_block_sbox, c_sbox);
 }
 
 #[test]
