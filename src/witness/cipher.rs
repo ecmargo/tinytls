@@ -1,7 +1,7 @@
 //! See Figure 8 in the paper to learn how this protocol works
 #![allow(non_snake_case)]
 
-use ark_ff::{AdditiveGroup, Field};
+use ark_ff::Field;
 
 use super::registry::aes_offsets;
 use super::trace::{cipher, keyschedule};

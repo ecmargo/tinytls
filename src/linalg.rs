@@ -61,3 +61,37 @@ pub fn linear_combination<F: Field>(vectors: &[&[F]], coefficients: &[F]) -> Vec
     }
     result
 }
+
+pub struct SparseMatrix<F: Field> {
+    pub num_rows: usize,
+    pub vals: Vec<F>,
+    pub rows: Vec<usize>,
+    pub cols: Vec<usize>,
+}
+
+impl<F: Field> SparseMatrix<F> {
+    pub fn new() -> Self {
+        Self {
+            num_rows: 0,
+            vals: Vec::new(),
+            rows: Vec::new(),
+            cols: Vec::new(),
+        }
+    }
+}
+
+impl<F, J> core::ops::Mul<J> for &SparseMatrix<F>
+where
+    F: Field,
+    J: AsRef<[F]>,
+{
+    type Output = Vec<F>;
+
+    fn mul(self, rhs: J) -> Self::Output {
+        let mut result = vec![F::zero(); self.num_rows];
+        for i in 0..self.rows.len() {
+            result[self.rows[i]] += self.vals[i] * rhs.as_ref()[self.cols[i]];
+        }
+        result
+    }
+}

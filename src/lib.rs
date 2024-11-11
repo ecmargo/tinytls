@@ -29,6 +29,6 @@ mod umsm;
 /// Verifier module.
 mod verifier;
 /// Witness gen module - GCM .
-mod witness_gcm;
+pub mod witness_gcm;
 
 pub use exports::*;

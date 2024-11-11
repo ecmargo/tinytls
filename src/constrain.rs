@@ -1,4 +1,5 @@
 use crate::linalg;
+use crate::witness::trace::utils::rotate_right_inplace;
 use crate::witness::{registry, trace::utils};
 use ark_ff::Field;
 
@@ -248,8 +249,6 @@ pub fn vec_cipher_mcol<F: Field, const R: usize>(
     crate::witness::trace::utils::rotate_right_inplace(&mut aux_m_col[2], 3);
     crate::witness::trace::utils::rotate_right_inplace(&mut aux_m_col[3], 3);
 
-    let high = F::from(16);
-
     let mut v: Vec<F> = Vec::new();
     let mut idx: Vec<usize> = Vec::new();
     let mut round_state: Vec<usize> = Vec::new();
@@ -299,7 +298,7 @@ pub fn gcm_final_xor<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2:
     let reg = registry::aes_gcm_block_offsets::<R>();
     let mut v_pos = 0;
 
-    //XOR over 16 byte messages
+    // XOR over 16 byte messages
     for i in 0..16 {
         let x_pos = 16 * i;
         let y_pos = 16 * (i + 1);
@@ -471,46 +470,200 @@ pub fn ks_lin_xor_map<F: Field, const R: usize, const N: usize>(
     constant_term
 }
 
-struct SparseMatrix<F: Field> {
-    pub val: Vec<F>,
-    pub row: Vec<usize>,
-    pub col: Vec<usize>,
-}
-
-impl<F: Field> SparseMatrix<F> {
-    pub fn new() -> Self {
-        Self {
-            val: Vec::new(),
-            row: Vec::new(),
-            col: Vec::new(),
-        }
-    }
-}
-
-fn matrix_sbox<F: Field>(input_offset: usize, output_offset: usize, c: F) -> SparseMatrix<F> {
+fn sbox_round_constrain<F: Field>(
+    row_offset: usize,
+    input_offset: usize,
+    output_offset: usize,
+    c: F,
+) -> linalg::SparseMatrix<F> {
     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
     let s_row = utils::shiftrows(identity);
 
-    let row = (0..16).map(|i| [i; 4]).flatten().collect::<Vec<_>>();
-    let col = (0..16)
+    let rows = (0..16)
+        .flat_map(|i| [row_offset + i; 2])
+        .collect::<Vec<_>>();
+    let cols = (0..16)
         .flat_map(|i| [s_row[i] + input_offset, i + output_offset])
         .collect::<Vec<_>>();
-    let val = (0..16)
-        .flat_map(|_| vec![F::ONE, F::from(16), c, c * F::from(16)])
-        .collect::<Vec<_>>();
-    return SparseMatrix { val, row, col };
+    let vals = (0..16).flat_map(|_| vec![F::ONE, c]).collect::<Vec<_>>();
+    return linalg::SparseMatrix {
+        num_rows: 16,
+        vals,
+        rows,
+        cols,
+    };
 }
 
-// #[test]
-// fn test_call_foo() {
-//     use ark_ff::AdditiveGroup;
+#[test]
+fn test_sbox_constrain() {
+    use ark_curve25519::Fr as FF;
+    use rand::Rng;
 
-//     let state = [0u8; 8];
-//     let output_state = sbox(state);
-//     let witness = vec![0u8; 32];
-//     let c_sbox = ark_curve25519::Fr::ZERO;
-//     let matrix_sbox = matrix_sbox::<F>(input_block_start, output_block_sbox, c_sbox);
-// }
+    let rng = &mut rand::thread_rng();
+    let c = rng.gen();
+    let sbox_mat = sbox_round_constrain(0, 0, 16, c);
+    let state = rng.gen::<[u8; 16]>();
+    let key = rng.gen::<[u8; 16]>();
+    let round_trace = crate::witness::trace::cipher::aes_round_trace(state, key);
+    let mut witness_u8: Vec<u8> = Vec::new();
+    witness_u8.extend_from_slice(&state);
+    witness_u8.extend_from_slice(&round_trace.s_box);
+
+    let witness = witness_u8.iter().map(|x| FF::from(*x)).collect::<Vec<_>>();
+    let needles = &sbox_mat * &witness;
+    let haystack = haystack_sbox(c);
+
+    assert!(
+        needles.iter().all(|x| haystack.contains(x)),
+        "Witness: {:?}, Needles: {:?}",
+        &witness,
+        &needles
+    );
+}
+
+fn rj2_round_constrain<F: Field>(
+    row_offset: usize,
+    input_offset: usize,
+    output_offset: usize,
+    c: F,
+) -> linalg::SparseMatrix<F> {
+    let rows = (0..16)
+        .flat_map(|i| [row_offset + i; 2])
+        .collect::<Vec<_>>();
+    let cols = (0..16)
+        .flat_map(|i| [i + input_offset, i + output_offset])
+        .collect::<Vec<_>>();
+    let vals = (0..16).flat_map(|_| vec![F::ONE, c]).collect::<Vec<_>>();
+    return linalg::SparseMatrix {
+        num_rows: 16,
+        vals,
+        rows,
+        cols,
+    };
+}
+
+#[test]
+fn test_rj2_round_constrain() {
+    use ark_curve25519::Fr as FF;
+    use rand::Rng;
+
+    let rng = &mut rand::thread_rng();
+    let c = rng.gen();
+    let sbox_mat = rj2_round_constrain(0, 0, 16, c);
+    let state = rng.gen::<[u8; 16]>();
+    let key = rng.gen::<[u8; 16]>();
+    let round_trace = crate::witness::trace::cipher::aes_round_trace(state, key);
+    let mut witness_u8: Vec<u8> = Vec::new();
+    witness_u8.extend_from_slice(&round_trace.s_box);
+    witness_u8.extend_from_slice(&round_trace.m_col[0]);
+
+    let witness = witness_u8.iter().map(|x| FF::from(*x)).collect::<Vec<_>>();
+    let needles = &sbox_mat * &witness;
+    let haystack = haystack_rj2(c);
+
+    assert!(
+        needles.iter().all(|x| haystack.contains(x)),
+        "Witness: {:?}, Needles: {:?}",
+        &witness,
+        &needles
+    );
+}
+
+fn mcol_round_constrain<F: Field>(
+    row_offset: usize,
+    lhs_offset: usize,
+    rhs_offset: usize,
+    output_offset: usize,
+    c: F,
+) -> linalg::SparseMatrix<F> {
+    let c2 = c.square();
+    let mut m_col_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    rotate_right_inplace(&mut m_col_idx, 1);
+
+    let rows = (0..16)
+        .flat_map(|i| [row_offset + i; 3])
+        .collect::<Vec<_>>();
+    let cols = (0..16)
+        .flat_map(|i| [i + lhs_offset, m_col_idx[i] + rhs_offset, i + output_offset])
+        .collect::<Vec<_>>();
+    let vals = (0..16)
+        .flat_map(|_| vec![F::ONE, c, c2])
+        .collect::<Vec<_>>();
+    return linalg::SparseMatrix {
+        num_rows: 16,
+        vals,
+        rows,
+        cols,
+    };
+}
+
+#[test]
+fn test_mcol_round_constrain() {
+    use ark_curve25519::Fr as FF;
+    use rand::Rng;
+
+    let rng = &mut rand::thread_rng();
+    let c = rng.gen::<FF>();
+    let c2 = c.square();
+    let mcol_mat = mcol_round_constrain(0, 16, 0, 32, c);
+    let state = rng.gen::<[u8; 16]>();
+    let key = rng.gen::<[u8; 16]>();
+    let round_trace = crate::witness::trace::cipher::aes_round_trace(state, key);
+    let mut witness_u8: Vec<u8> = Vec::new();
+    witness_u8.extend_from_slice(&round_trace.s_box);
+    witness_u8.extend_from_slice(&round_trace.m_col[0]);
+    witness_u8.extend_from_slice(&round_trace.m_col[1]);
+    // witness_u8.extend_from_slice(&round_trace.m_col[2]);
+    // witness_u8.extend_from_slice(&round_trace.m_col[3]);
+
+
+    let witness_lo = witness_u8.iter().map(|x| FF::from(*x & 0x0f)).collect::<Vec<_>>();
+    let witness_hi = witness_u8.iter().map(|x| FF::from(*x >> 4)).collect::<Vec<_>>();
+
+    let needles_lo = &mcol_mat * &witness_lo;
+    let needles_hi = &mcol_mat * &witness_hi;
+    let needles = needles_lo.iter().chain(needles_hi.iter()).collect::<Vec<_>>();
+    let haystack = haystack_xor(c, c2);
+
+    assert!(
+        needles.iter().all(|x| haystack.contains(x)),
+    );
+}
+
+/// Return the lookup table for the AES s-box
+#[inline]
+fn haystack_sbox<F: Field>(c_sbox: F) -> Vec<F> {
+    (0u8..=255)
+        .map(|i| {
+            let x = i;
+            let y = utils::SBOX[x as usize];
+            F::from(x) + c_sbox * F::from(y)
+        })
+        .collect()
+}
+
+#[inline]
+fn haystack_rj2<F: Field>(c_rj2: F) -> Vec<F> {
+    (0u8..=255)
+        .map(|i| {
+            let x = i;
+            let y = utils::RJ2[x as usize];
+            F::from(x) + c_rj2 * F::from(y)
+        })
+        .collect()
+}
+
+#[inline]
+fn haystack_xor<F: Field>(c: F, c2: F) -> Vec<F> {
+    (0u8..=0xff)
+        .map(|i| {
+            let x = i & 0x0f;
+            let y = i >> 4;
+            let z = x ^ y;
+            F::from(x) + c * F::from(y) + c2 * F::from(z)
+        })
+        .collect()
+}
 
 #[test]
 fn test_sbox() {
@@ -540,100 +693,94 @@ fn test_sbox() {
 
     let output: Vec<F> = combine_yale_to_needles::<F>(round_state, idx, v, vector_witness);
 
-    let haystack_s_box = (0u8..=255)
-        .map(|i| {
-            let x = i;
-            let y = utils::SBOX[x as usize];
-            F::from(x) + c_sbox * F::from(y)
-        })
-        .collect::<Vec<_>>();
+    let haystack_s_box = haystack_sbox(c_sbox);
 
     assert!(output.into_iter().all(|x| (haystack_s_box.contains(&x))));
 }
 
-#[test]
-fn test_rj2() {
-    type F = ark_curve25519::Fr;
-    use crate::traits::Witness;
-    use crate::witness::cipher::AesCipherWitness;
-    use ark_std::{UniformRand, Zero};
+// #[test]
+// fn test_rj2() {
+//     type F = ark_curve25519::Fr;
+//     use crate::traits::Witness;
+//     use crate::witness::cipher::AesCipherWitness;
+//     use ark_std::{UniformRand, Zero};
 
-    let rng = &mut rand::thread_rng();
+//     let rng = &mut rand::thread_rng();
 
-    let message = [
-        0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69, 0x0C,
-        0xE7,
-    ];
-    let key = [
-        0xE7u8, 0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69,
-        0x0C,
-    ];
+//     let message = [
+//         0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69, 0x0C,
+//         0xE7,
+//     ];
+//     let key = [
+//         0xE7u8, 0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69,
+//         0x0C,
+//     ];
 
-    let c_rj2 = F::rand(rng);
+//     let c_rj2 = F::rand(rng);
 
-    let haystack_r2j = (0u8..=255)
-        .map(|i| {
-            let x = i;
-            let y = utils::RJ2[x as usize];
-            F::from(x) + c_rj2 * F::from(y)
-        })
-        .collect::<Vec<_>>();
+//     let haystack_r2j = (0u8..=255)
+//         .map(|i| {
+//             let x = i;
+//             let y = utils::RJ2[x as usize];
+//             F::from(x) + c_rj2 * F::from(y)
+//         })
+//         .collect::<Vec<_>>();
 
-    let witness = AesCipherWitness::<F, 11, 4>::new(message, &key, F::zero(), F::zero());
+//     let witness = AesCipherWitness::<F, 11, 4>::new(message, &key, F::zero(), F::zero());
 
-    let vector_witness = AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+//     let vector_witness = AesCipherWitness::<F, 11, 4>::full_witness(&witness);
 
-    //Leaving these here because not entirely sure what to do with them.
-    let offset = 16 * 10;
-    let sub = (&vector_witness[offset..]).to_vec();
+//     //Leaving these here because not entirely sure what to do with them.
+//     let offset = 16 * 10;
+//     let sub = (&vector_witness[offset..]).to_vec();
 
-    let (v, idx, round_state) = vec_cipher_rj2::<F, 11>(c_rj2);
+//     let (v, idx, round_state) = vec_cipher_rj2::<F, 11>(c_rj2);
 
-    let output: Vec<F> = combine_yale_to_needles(round_state, idx, v, vector_witness);
+//     let output: Vec<F> = combine_yale_to_needles(round_state, idx, v, vector_witness);
 
-    assert!(output.into_iter().all(|x| (haystack_r2j.contains(&x))));
-}
+//     assert!(output.into_iter().all(|x| (haystack_r2j.contains(&x))));
+// }
 
-#[test]
-fn test_mcol() {
-    use ark_ff::{AdditiveGroup, Field};
-    type F = ark_curve25519::Fr;
-    use crate::traits::Witness;
-    use crate::witness::cipher::AesCipherWitness;
-    use ark_std::{UniformRand, Zero};
+// #[test]
+// fn test_mcol() {
+//     use ark_ff::{AdditiveGroup, Field};
+//     type F = ark_curve25519::Fr;
+//     use crate::traits::Witness;
+//     use crate::witness::cipher::AesCipherWitness;
+//     use ark_std::{UniformRand, Zero};
 
-    let rng = &mut rand::thread_rng();
+//     let rng = &mut rand::thread_rng();
 
-    let message = [
-        0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69, 0x0C,
-        0xE7,
-    ];
-    let key = [
-        0xE7u8, 0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69,
-        0x0C,
-    ];
+//     let message = [
+//         0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69, 0x0C,
+//         0xE7,
+//     ];
+//     let key = [
+//         0xE7u8, 0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69,
+//         0x0C,
+//     ];
 
-    let c_xor1 = F::ONE;
-    //F::rand(rng);
-    let c_xor2 = F::ONE;
-    let c_sbox = F::ONE;
-    let c_rj2 = F::ONE;
-    //F::rand(rng);
+//     let c_xor1 = F::ONE;
+//     //F::rand(rng);
+//     let c_xor2 = F::ONE;
+//     let c_sbox = F::ONE;
+//     let c_rj2 = F::ONE;
+//     //F::rand(rng);
 
-    let (haystack, inv_haystack) =
-        crate::lookup::compute_haystack([c_xor1, c_xor2, c_sbox, c_rj2], F::ZERO);
+//     let (haystack, inv_haystack) =
+//         crate::lookup::compute_haystack([c_xor1, c_xor2, c_sbox, c_rj2], F::ZERO);
 
-    let witness = AesCipherWitness::<F, 11, 4>::new(message, &key, F::zero(), F::zero());
+//     let witness = AesCipherWitness::<F, 11, 4>::new(message, &key, F::ZERO, F::ZERO);
 
-    let vector_witness = AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+//     let vector_witness = AesCipherWitness::<F, 11, 4>::full_witness(&witness);
 
-    //Leaving these here because not entirely sure what to do with them.
-    let offset = 16 * 10;
-    let sub = (&vector_witness[offset..]).to_vec();
+//     //Leaving these here because not entirely sure what to do with them.
+//     let offset = 16 * 10;
+//     let sub = (&vector_witness[offset..]).to_vec();
 
-    let (v, idx, round_state) = vec_cipher_mcol::<F, 11>(c_xor1, c_xor2);
+//     let (v, idx, round_state) = vec_cipher_mcol::<F, 11>(c_xor1, c_xor2);
 
-    let output: Vec<F> = combine_yale_to_needles(round_state, idx, v, vector_witness);
+//     let output: Vec<F> = combine_yale_to_needles(round_state, idx, v, vector_witness);
 
-    assert!(output.into_iter().all(|x| (haystack.contains(&x))));
-}
+//     assert!(output.into_iter().all(|x| (haystack.contains(&x))));
+// }
