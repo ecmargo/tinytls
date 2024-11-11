@@ -34,7 +34,7 @@ impl<F: Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F, R, N>
         key_opening: F,
         plain_text_opening: F,
     ) -> Self {
-        assert_eq!(key.len(), N * 4);
+        assert_eq!(key.len(), N * 2);
         let trace = AesGCMCipherBlockTrace::new(
             key.try_into().expect("invalid keylenght"),
             counter,
