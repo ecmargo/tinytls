@@ -60,6 +60,8 @@ pub fn _aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
     (dst, constant_term)
 }
 
+//Make sparse matrix struct (I feel like this must exist already in rust and adapt sbox to work for a single round on that)
+
 pub fn combine_yale_to_needles<F: Field>(
     round_states: Vec<usize>,
     idx: Vec<usize>,
@@ -97,8 +99,8 @@ pub fn vec_cipher_sbox<F: Field, const R: usize>(c_sbox: F) -> (Vec<F>, Vec<usiz
     let mut output;
 
     let mut v: Vec<F> = Vec::new();
-    let mut idx: Vec<usize> = Vec::new();
-    let mut round_state: Vec<usize> = Vec::new();
+    let mut cols: Vec<usize> = Vec::new();
+    let mut rows: Vec<usize> = Vec::new();
 
     let mut counter = 0;
 
@@ -115,18 +117,18 @@ pub fn vec_cipher_sbox<F: Field, const R: usize>(c_sbox: F) -> (Vec<F>, Vec<usiz
             v.push(c_sbox);
             v.push(c_sbox * high);
 
-            idx.push(input);
-            idx.push(input + 1);
-            idx.push(output);
-            idx.push(output + 1);
+            cols.push(input);
+            cols.push(input + 1);
+            cols.push(output);
+            cols.push(output + 1);
 
-            let c = [counter; 4];
-            round_state.extend_from_slice(&c);
+            let row: [usize; 4] = [counter; 4];
+            rows.extend_from_slice(&row);
 
             counter += 1;
         }
     }
-    (v, idx, round_state)
+    (v, cols, rows)
 }
 
 pub fn cipher_sbox<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
@@ -760,27 +762,38 @@ fn test_sbox() {
 //         0x0C,
 //     ];
 
-//     let c_xor1 = F::ONE;
-//     //F::rand(rng);
-//     let c_xor2 = F::ONE;
-//     let c_sbox = F::ONE;
-//     let c_rj2 = F::ONE;
-//     //F::rand(rng);
+    // let c_xor1 = F::ZERO;
+    // //F::rand(rng);
+    // let c_xor2 = F::ZERO;
+    // //F::rand(rng);
 
-//     let (haystack, inv_haystack) =
-//         crate::lookup::compute_haystack([c_xor1, c_xor2, c_sbox, c_rj2], F::ZERO);
+
+    // let haystack_xor = (0u8..=255)
+    // .map(|i| {
+    //     let x = i & 0xf;
+    //     let y = i >> 4;
+    //     let z = x ^ y;
+    //     F::from(x) + c_xor1 * F::from(y) + c_xor2 * F::from(z)
+    // })
+    // .collect::<Vec<_>>();
+
+    // let (haystack, inv_haystack) = lookup::compute_haystack([c_xor1, c_xor2, c_sbox, c_rj2], F::ZERO);
 
 //     let witness = AesCipherWitness::<F, 11, 4>::new(message, &key, F::ZERO, F::ZERO);
 
 //     let vector_witness = AesCipherWitness::<F, 11, 4>::full_witness(&witness);
 
-//     //Leaving these here because not entirely sure what to do with them.
-//     let offset = 16 * 10;
-//     let sub = (&vector_witness[offset..]).to_vec();
+    //Leaving these here because not entirely sure what to do with them.
+    // let offset = 16 * 10;
+    // let sub = (&vector_witness[offset..]).to_vec();
 
 //     let (v, idx, round_state) = vec_cipher_mcol::<F, 11>(c_xor1, c_xor2);
 
 //     let output: Vec<F> = combine_yale_to_needles(round_state, idx, v, vector_witness);
 
-//     assert!(output.into_iter().all(|x| (haystack.contains(&x))));
+//     println!("output: {:?}", output); 
+//     println!("haystack {:?}", haystack_xor);
+
+//     assert!(output.into_iter().all(|x|(haystack_xor.contains(&x))));
 // }
+
