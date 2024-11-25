@@ -63,6 +63,43 @@ pub fn _aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
     (dst, constant_term)
 }
 
+
+
+pub fn cipher_sbox<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
+    let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    let s_row = utils::shiftrows(identity);
+    let reg = registry::aes_offsets::<R>();
+
+    for round in 0..R - 1 {
+        for i in 0..16 {
+            let s_row_pos = 16 * round + s_row[i] as usize;
+            let s_box_pos = 16 * round + i;
+            let c_lo = v[round * 16 + i];
+            let c_hi = c_lo.double().double().double().double();
+            dst[(reg.start + s_row_pos) * 2] += c_lo;
+            dst[(reg.start + s_row_pos) * 2 + 1] += c_hi;
+            dst[(reg.s_box + s_box_pos) * 2] += r * c_lo;
+            dst[(reg.s_box + s_box_pos) * 2 + 1] += r * c_hi;
+        }
+    }
+}
+
+pub fn cipher_rj2<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
+    let reg = registry::aes_offsets::<R>();
+
+    for round in 0..R - 2 {
+        for i in 0..16 {
+            let pos = 16 * round + i;
+            let c_lo = v[pos];
+            let c_hi = c_lo.double().double().double().double();
+            dst[(reg.s_box + pos) * 2] += c_lo;
+            dst[(reg.s_box + pos) * 2 + 1] += c_hi;
+            dst[(reg.m_col[0] + pos) * 2] += r * c_lo;
+            dst[(reg.m_col[0] + pos) * 2 + 1] += r * c_hi;
+        }
+    }
+}
+
 pub fn cipher_mcol<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F) {
     let identity = (0..16).collect::<Vec<_>>();
     let registry = registry::aes_offsets::<R>();
@@ -96,69 +133,6 @@ pub fn cipher_mcol<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F
         }
     }
 }
-
-// pub fn vec_cipher_mcol<F: Field, const R: usize>(
-//     c_xor1: F,
-//     c_xor2: F,
-// ) -> (Vec<F>, Vec<usize>, Vec<usize>) {
-//     let identity = (0..16).collect::<Vec<_>>();
-//     let regions = registry::aes_offsets::<R>();
-
-//     let mut aux_m_col = vec![identity; 4];
-//     crate::witness::trace::utils::rotate_right_inplace(&mut aux_m_col[0], 1);
-//     crate::witness::trace::utils::rotate_right_inplace(&mut aux_m_col[1], 2);
-//     crate::witness::trace::utils::rotate_right_inplace(&mut aux_m_col[2], 3);
-//     crate::witness::trace::utils::rotate_right_inplace(&mut aux_m_col[3], 3);
-
-//     let mut v: Vec<F> = Vec::new();
-//     let mut idx: Vec<usize> = Vec::new();
-//     let mut round_state: Vec<usize> = Vec::new();
-
-//     let mut counter = 0;
-
-//     for k in 0..4 {
-//         for round in 0..R - 2 {
-//             let row_offset = 16 * round;
-//             let lhs_offset = regions.s_box;
-//             let rhs_offset = regions.m_col[0];
-
-//             let round_matrix = mcol_round_constrain(row_offset, lhs_offset, rhs_offset, output_offset, c);
-// for i in 0..16 {
-//     let pos = 16 * round + i;
-//     let ys_pos = 16 * round + aux_m_col[k][i];
-//     let ys_offset = if k < 3 {
-//         regions.s_box
-//     } else {
-//         regions.m_col[0]
-//     };
-
-//     let input_l = (regions.m_col[k] + pos) * 2;
-//     let input_r = (regions.m_col[k + 1] + pos) * 2;
-//     let outout = (ys_offset + ys_pos) * 2;
-
-//     v.push(F::ONE);
-//     v.push(c_xor2);
-//     v.push(F::ONE);
-//     v.push(c_xor2);
-//     v.push(c_xor1);
-//     v.push(c_xor1);
-
-//     idx.push(input_l);
-//     idx.push(input_r);
-//     idx.push(input_l + 1);
-//     idx.push(input_r + 1);
-//     idx.push(outout);
-//     idx.push(outout + 1);
-
-//     let c = [counter; 6];
-//     round_state.extend_from_slice(&c);
-
-//     counter += 1;
-// }
-//         }
-//     }
-//     (v, idx, round_state)
-// }
 
 pub fn gcm_final_xor<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F) {
     let reg = registry::aes_gcm_block_offsets::<R>();
