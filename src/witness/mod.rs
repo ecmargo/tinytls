@@ -9,6 +9,9 @@ pub mod cipher;
 /// Registry: store and retrieve chunks of the witness.
 pub mod registry;
 
+/// AES GCM witness generation
+pub mod gcm;
+
 // Re-export common functions
 pub use trace::cipher::AesCipherTrace;
 pub use trace::cipher::{aes128, aes256};

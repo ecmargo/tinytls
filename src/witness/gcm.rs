@@ -3,13 +3,11 @@
 
 use ark_ff::Field;
 
-use super::lookup;
+use crate::lookup;
 use crate::traits::Witness;
 use crate::witness::cipher::AesCipherWitness;
 use crate::witness::registry::aes_gcm_block_offsets;
-use crate::witness::trace::aes_gcm::{
-    self, AesGCMCipherBlockTrace, AesGCMCipherTrace, AesGCMCounter,
-};
+use crate::witness::trace::gcm::{self, AesGCMCipherBlockTrace, AesGCMCipherTrace, AesGCMCounter};
 use crate::MultiBlockWitness;
 
 #[derive(Default, Clone)]
@@ -53,7 +51,7 @@ impl<F: Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F, R, N>
         }
     }
 
-    pub(crate) fn vectorize_witness(witness: &aes_gcm::AesGCMCipherBlockTrace) -> Vec<u8> {
+    pub(crate) fn vectorize_witness(witness: &gcm::AesGCMCipherBlockTrace) -> Vec<u8> {
         let mut w: Vec<u8> =
             AesCipherWitness::<F, R, N>::vectorize_witness(&witness.aes_cipher_trace);
         let registry = aes_gcm_block_offsets::<R>();

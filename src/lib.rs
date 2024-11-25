@@ -28,7 +28,5 @@ mod traits;
 mod umsm;
 /// Verifier module.
 mod verifier;
-/// Witness gen module - GCM .
-pub mod witness_gcm;
 
 pub use exports::*;
