@@ -79,13 +79,27 @@ impl<F: Field> SparseMatrix<F> {
         }
     }
 
-    pub fn combine(mut self, other: SparseMatrix<F>)->Self {
+    pub fn combine(mut self, other: SparseMatrix<F>) -> Self {
         self.num_rows = self.num_rows + other.num_rows;
         self.vals.extend_from_slice(&other.vals);
         self.rows.extend_from_slice(&other.rows);
         self.cols.extend_from_slice(&other.cols);
         self
     }
+
+    pub fn combine_with_rowshift(mut self, other: SparseMatrix<F>) -> Self {
+        self.vals.extend_from_slice(&other.vals);
+        self.cols.extend_from_slice(&other.cols);
+
+        let shifted: Vec<usize> = other.rows.into_iter().map(|x| x + self.num_rows).collect();
+        self.rows.extend_from_slice(&shifted);
+
+        self.num_rows = self.num_rows + other.num_rows;
+
+        self
+    }
+
+    //make secondary combine function to not just extend the rows but also to shift, to avoid needing the row offsets
 }
 
 impl<F, J> core::ops::Mul<J> for &SparseMatrix<F>
