@@ -40,28 +40,28 @@ pub fn aes_keysch_trace_to_needles<F: Field, const R: usize, const N: usize>(
     (dst, constant_term)
 }
 
-pub fn _aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
-    aes_output: &[u8; 16],
-    _final_xor: &[u8; 16],
-    src: &[F],
-    [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
-) -> (Vec<F>, F) {
-    let regions = registry::aes_gcm_block_offsets::<R>();
+// pub fn _aes_gcm_block_trace_to_needles<F: Field, const R: usize>(
+//     aes_output: &[u8; 16],
+//     _final_xor: &[u8; 16],
+//     src: &[F],
+//     [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
+// ) -> (Vec<F>, F) {
+//     let regions = registry::aes_gcm_block_offsets::<R>();
 
-    let mut dst = vec![F::zero(); regions.witness_len * 2];
-    let mut offset = 0;
-    cipher_sbox::<F, R>(&mut dst, src, c_sbox);
-    offset += 16 * (R - 1);
-    cipher_rj2::<F, R>(&mut dst, &src[offset..], c_rj2);
-    offset += 16 * (R - 2);
-    cipher_mcol::<F, R>(&mut dst, &src[offset..], c_xor, c_xor2);
-    offset += 16 * (R - 2) * 4 * 2;
-    let constant_term =
-        cipher_addroundkey::<F, R>(aes_output, &mut dst, &src[offset..], c_xor, c_xor2);
-    gcm_final_xor::<F, R>(&mut dst, &src[offset..], c_xor, c_xor2);
-    //not including the constant term here because im not sure its needed?
-    (dst, constant_term)
-}
+//     let mut dst = vec![F::zero(); regions.witness_len * 2];
+//     let mut offset = 0;
+//     cipher_sbox::<F, R>(&mut dst, src, c_sbox);
+//     offset += 16 * (R - 1);
+//     cipher_rj2::<F, R>(&mut dst, &src[offset..], c_rj2);
+//     offset += 16 * (R - 2);
+//     cipher_mcol::<F, R>(&mut dst, &src[offset..], c_xor, c_xor2);
+//     offset += 16 * (R - 2) * 4 * 2;
+//     let constant_term =
+//         cipher_addroundkey::<F, R>(aes_output, &mut dst, &src[offset..], c_xor, c_xor2);
+//     gcm_final_xor::<F, R>(&mut dst, &src[offset..], c_xor, c_xor2);
+//     //not including the constant term here because im not sure its needed?
+//     (dst, constant_term)
+// }
 
 
 
@@ -131,31 +131,6 @@ pub fn cipher_mcol<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F
                 dst[(registry.m_col[k + 1] + pos) * 2 + 1] += r2 * v_odd;
             }
         }
-    }
-}
-
-pub fn gcm_final_xor<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F) {
-    let reg = registry::aes_gcm_block_offsets::<R>();
-    let mut v_pos = 0;
-
-    // XOR over 16 byte messages
-    for i in 0..16 {
-        let x_pos = 16 * i;
-        let y_pos = 16 * (i + 1);
-        let z_pos = 16 * (i + 2);
-
-        let v_even = v[v_pos * 2];
-        let v_odd = v[v_pos * 2 + 1];
-
-        dst[(reg.final_xor + x_pos) * 2] += v_even;
-        dst[(reg.final_xor + y_pos) * 2] += r * v_even;
-        dst[(reg.final_xor + z_pos) * 2] += r2 * v_even;
-
-        dst[(reg.final_xor + x_pos) * 2 + 1] += v_odd;
-        dst[(reg.final_xor + y_pos) * 2 + 1] += r * v_odd;
-        dst[(reg.final_xor + z_pos) * 2 + 1] += r2 * v_odd;
-
-        v_pos += 1;
     }
 }
 
@@ -668,6 +643,8 @@ pub fn rotate_xor_contstrain<F: Field>(
     };
 }
 
+
+
 pub fn mcol_round_constrain<F: Field>(
     row_base_offset: usize,
     lhs_base_offset: usize,
@@ -704,8 +681,6 @@ pub fn mcol_round_constrain<F: Field>(
 
     let mcol_mat = mcol_mat_r4.combine(mcol_mat_r3.combine(mcol_mat_r2.combine(mcol_mat_r1)));
 
-    println!("{:?}", mcol_mat.num_rows);
-
     mcol_mat
 
 
@@ -715,15 +690,60 @@ pub fn mcol_constrain<F:Field, const R: usize>(c:F, c2: F) -> linalg::SparseMatr
     let reg = registry::aes_offsets::<R>();
     let m_col_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
-    let mcol_mat: linalg::SparseMatrix<F> = (0..R-2).map(|round| {
-        let row_offset = 16*round; 
-        let lhs_offset = reg.m_col[0] + row_offset;
-        let rhs_offset = reg.s_box + row_offset;
-        let output_offset = reg.m_col[1] + row_offset;
-        mcol_round_constrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2)
+    let mat_size = 32 * (R-2); 
+
+    let mut mcol_mat = linalg::SparseMatrix::new();
+
+    let mcol_mat1s: linalg::SparseMatrix<F> = (0..R-2).map(|round| {
+        let row_offset = 32*round; 
+        let offset_shift = 16*round; 
+        let lhs_offset = reg.m_col[0] + offset_shift;
+        let rhs_offset = reg.s_box + offset_shift;
+        let output_offset = reg.m_col[1] + offset_shift;
+        rotate_xor_contstrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2,1)
 
     }).reduce(linalg::SparseMatrix::combine)
     .unwrap();
+
+    mcol_mat = mcol_mat.combine(mcol_mat1s);
+
+    let mcol_mat2s: linalg::SparseMatrix<F> = (0..R-2).map(|round| {
+        let row_offset = 32*round + mat_size; 
+        let offset_shift = 16*round; 
+        let lhs_offset = reg.m_col[1] + offset_shift;
+        let rhs_offset = reg.s_box + offset_shift;
+        let output_offset = reg.m_col[2] + offset_shift;
+        rotate_xor_contstrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2,2)
+
+    }).reduce(linalg::SparseMatrix::combine)
+    .unwrap();
+
+    mcol_mat = mcol_mat.combine(mcol_mat2s);
+
+    let mcol_mat3s: linalg::SparseMatrix<F> = (0..R-2).map(|round| {
+        let row_offset = 32*round + (mat_size * 2); 
+        let offset_shift = 16*round; 
+        let lhs_offset = reg.m_col[2] + offset_shift;
+        let rhs_offset = reg.s_box + offset_shift;
+        let output_offset = reg.m_col[3] + offset_shift;
+        rotate_xor_contstrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2,3)
+    }).reduce(linalg::SparseMatrix::combine)
+    .unwrap();
+
+    mcol_mat = mcol_mat.combine(mcol_mat3s);
+
+    let mcol_mat4s: linalg::SparseMatrix<F> = (0..R-2).map(|round| {
+        let row_offset = 32*round + (mat_size * 3); 
+        let offset_shift = 16*round; 
+        let lhs_offset = reg.m_col[3] + offset_shift;
+        let rhs_offset = reg.m_col[0] + offset_shift;
+        let output_offset = reg.m_col[4] + offset_shift;
+        rotate_xor_contstrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2,3)
+
+    }).reduce(linalg::SparseMatrix::combine)
+    .unwrap();
+
+    mcol_mat = mcol_mat.combine(mcol_mat4s);
 
     mcol_mat
 }
@@ -736,10 +756,8 @@ fn test_mcol_constrain() {
     use rand::Rng;
 
     let rng = &mut rand::thread_rng();
-    let c = F::ZERO;
-    //rng.gen::<F>();
-    let c2 = F::ZERO;
-    //c.square();
+    let c = rng.gen::<F>();
+    let c2 = c.square();
 
 
     let mut mcol_mat = mcol_constrain::<F, 11>(c, c2);
