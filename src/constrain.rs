@@ -4,7 +4,7 @@ use crate::linalg::{self, SparseMatrix};
 use crate::witness;
 use crate::witness::trace::utils::{rotate_right_inplace, RJ2};
 use crate::witness::{registry, trace::utils};
-use ark_ff::{Field, Zero};
+use ark_ff::{AdditiveGroup, Field, Zero};
 
 pub fn aes_trace_to_needles<F: Field, const R: usize>(
     output: &[u8; 16],
@@ -310,6 +310,118 @@ pub fn ks_lin_xor_map<F: Field, const R: usize, const N: usize>(
     constant_term
 }
 
+pub fn add_roundkey_round_constrain<F:Field>(
+    row_offset: usize,
+    lhs_offset: usize,
+    rhs_offset: usize,
+    output_offset: usize,
+    c: F,
+    c2: F,
+) -> linalg::SparseMatrix<F> { 
+    rotate_xor_contstrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2, 0)
+}
+
+#[test]
+fn test_add_roundkey_round_constrain() {
+    type F = ark_curve25519::Fr;
+    use crate::traits::Witness;
+    use ark_std::{UniformRand, Zero};
+    use rand::Rng;
+
+    let rng = &mut rand::thread_rng();
+    let c:F = rng.gen();
+    let c2 = c.square();
+
+    let state = rng.gen::<[u8; 16]>();
+    let key = rng.gen::<[u8; 16]>();
+    
+    let round_trace = crate::witness::trace::cipher::aes_round_trace(state, key);
+    let mut witness_u8: Vec<u8> = Vec::new();
+    witness_u8.extend_from_slice(&round_trace.start);
+    witness_u8.extend_from_slice(&round_trace.m_col[4]);
+    witness_u8.extend_from_slice(&key);
+    witness_u8 = witness_u8.iter().flat_map(|x| [x & 0xf, x >> 4]).collect();
+
+    let witness = witness_u8.iter().map(|x| F::from(*x)).collect::<Vec<_>>();
+
+    let add_roundkey_mat = add_roundkey_round_constrain(0, 16, 32, 0, c, c2);
+
+    let needles = &add_roundkey_mat * &witness;
+    let haystack = haystack_xor(c,c2);
+
+
+    assert!(
+        needles.iter().all(|x| haystack.contains(x)),
+        "Needles: {:?}, Needles not in stack {:?}",
+        &needles.len(),
+        &needles
+            .iter()
+            .filter(|&x| !haystack.contains(&x))
+            .cloned()
+            .collect::<Vec<_>>().len()
+    );
+}
+
+
+
+pub fn add_roundkey_constrain<F:Field, const R: usize>(
+    c: F,
+    c2: F,
+) -> linalg::SparseMatrix<F> { 
+    //Normal rounds 
+    let reg = registry::aes_offsets::<R>(); 
+    let middle_rounds = (1..R-1).map(|round| {
+        let row_offset = round*16; 
+        let lhs_offset = reg.m_col[4] + row_offset; 
+        let rhs_offset = reg.round_keys + row_offset;
+        let output_offset = reg.start + row_offset; 
+
+        add_roundkey_round_constrain::<F>(row_offset, lhs_offset, rhs_offset, output_offset, c, c2)
+    }).reduce(linalg::SparseMatrix::combine).unwrap();
+    
+    middle_rounds
+}
+
+#[test]
+fn test_add_roundkey_constrain() {
+    type F = ark_curve25519::Fr;
+    use crate::traits::Witness;
+    use ark_std::{UniformRand, Zero};
+    use rand::Rng;
+
+    let rng = &mut rand::thread_rng();
+    let c:F = F::ZERO;
+    //rng.gen();
+    let c2 = F::ZERO;
+    //c.square();
+    let mut add_roundkey_mat: SparseMatrix<F> = add_roundkey_constrain::<F, 11>(c,c2);
+    let state = rng.gen::<[u8; 16]>();
+    let key = rng.gen::<[u8; 16]>();
+    let witness = crate::witness::cipher::AesCipherWitness::<F, 11, 4>::new(
+        state,
+        &key,
+        F::zero(),
+        F::zero(),
+    );
+
+    let vector_witness =
+        crate::witness::cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+    let needles = &add_roundkey_mat * &vector_witness;
+    let haystack = haystack_xor(c,c2);
+
+
+    assert!(
+        needles.iter().all(|x| haystack.contains(x)),
+        "Needles: {:?}, Needles not in stack {:?}",
+        &needles.len(),
+        &needles
+            .iter()
+            .filter(|&x| !haystack.contains(&x))
+            .cloned()
+            .collect::<Vec<_>>().len()
+    );
+}
+
 pub fn sbox_constrain<F: Field, const R: usize>(c: F) -> linalg::SparseMatrix<F> {
     let reg = registry::aes_offsets::<R>();
     let sbox_mat = (0..R - 1)
@@ -525,22 +637,25 @@ fn test_rj2_round_constrain() {
     );
 }
 
-fn mcol_round_constrain<F: Field>(
+pub fn rotate_xor_contstrain<F: Field>(
     row_offset: usize,
     lhs_offset: usize,
     rhs_offset: usize,
     output_offset: usize,
     c: F,
-    c2: F
+    c2: F,
+    n_rotate: usize,
 ) -> linalg::SparseMatrix<F> {
-    let mut m_col_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-    rotate_right_inplace(&mut m_col_idx, 1);
+
+    let mut identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    rotate_right_inplace(&mut identity, n_rotate);
 
     let rows = (0..32)
         .flat_map(|i| [row_offset + i; 3])
         .collect::<Vec<_>>();
     let cols = (0..16)
-        .map(|i| [i + lhs_offset, m_col_idx[i] + rhs_offset, i + output_offset]).flat_map(|x| [x[0]*2, x[1]*2, x[2]*2,x[0]*2+1, x[1]*2+1, x[2]*2+1])
+    //hate this
+        .map(|i| [i + lhs_offset, identity[i] as usize + rhs_offset, i + output_offset]).flat_map(|x| [x[0]*2, x[1]*2, x[2]*2,x[0]*2+1, x[1]*2+1, x[2]*2+1])
         .collect::<Vec<_>>();
     let vals = (0..32)
         .flat_map(|_| vec![F::ONE, c, c2])
@@ -553,6 +668,109 @@ fn mcol_round_constrain<F: Field>(
     };
 }
 
+pub fn mcol_round_constrain<F: Field>(
+    row_base_offset: usize,
+    lhs_base_offset: usize,
+    rhs_base_offset: usize,
+    output_base_offset: usize,
+    c: F,
+    c2: F,
+) -> linalg::SparseMatrix<F>  {
+    let mut row_offset = row_base_offset; 
+    let mut lhs_offset = lhs_base_offset;
+    let mut rhs_offset = rhs_base_offset; 
+    let mut output_offset = output_base_offset; 
+
+    lhs_offset = lhs_offset;
+    output_offset = output_offset;
+    let mcol_mat_r1 = rotate_xor_contstrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2,  1);
+
+
+    row_offset = row_offset + 32; 
+    lhs_offset = lhs_offset + 16; 
+    output_offset = output_offset + 16; 
+    let mcol_mat_r2 = rotate_xor_contstrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2,  2);
+
+    row_offset = row_offset + 32; 
+    lhs_offset = lhs_offset + 16; 
+    output_offset = output_offset + 16; 
+    let mcol_mat_r3 = rotate_xor_contstrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2,  3);
+
+    row_offset = row_offset + 32; 
+    lhs_offset = lhs_offset + 16; 
+    rhs_offset = rhs_base_offset + 16;
+    output_offset = output_offset + 16; 
+    let mcol_mat_r4 = rotate_xor_contstrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2, 3);
+
+    let mcol_mat = mcol_mat_r4.combine(mcol_mat_r3.combine(mcol_mat_r2.combine(mcol_mat_r1)));
+
+    println!("{:?}", mcol_mat.num_rows);
+
+    mcol_mat
+
+
+}
+
+pub fn mcol_constrain<F:Field, const R: usize>(c:F, c2: F) -> linalg::SparseMatrix<F> {
+    let reg = registry::aes_offsets::<R>();
+    let m_col_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+    let mcol_mat: linalg::SparseMatrix<F> = (0..R-2).map(|round| {
+        let row_offset = 16*round; 
+        let lhs_offset = reg.m_col[0] + row_offset;
+        let rhs_offset = reg.s_box + row_offset;
+        let output_offset = reg.m_col[1] + row_offset;
+        mcol_round_constrain(row_offset, lhs_offset, rhs_offset, output_offset, c, c2)
+
+    }).reduce(linalg::SparseMatrix::combine)
+    .unwrap();
+
+    mcol_mat
+}
+
+#[test]
+fn test_mcol_constrain() {
+    type F = ark_curve25519::Fr;
+    use crate::traits::Witness;
+    use ark_std::{UniformRand, Zero};
+    use rand::Rng;
+
+    let rng = &mut rand::thread_rng();
+    let c = F::ZERO;
+    //rng.gen::<F>();
+    let c2 = F::ZERO;
+    //c.square();
+
+
+    let mut mcol_mat = mcol_constrain::<F, 11>(c, c2);
+
+    let state = rng.gen::<[u8; 16]>();
+    let key = rng.gen::<[u8; 16]>();
+    let round_trace = crate::witness::trace::cipher::aes_round_trace(state, key);
+    let witness = crate::witness::cipher::AesCipherWitness::<F, 11, 4>::new(
+        state,
+        &key,
+        F::zero(),
+        F::zero(),
+    );
+
+    let vector_witness =
+        crate::witness::cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+    let needles = &mcol_mat * &vector_witness;
+    let haystack = haystack_xor(c, c2);
+
+    assert!(
+        needles.iter().all(|x| haystack.contains(x)),
+        "Needles: {:?}, Needles not in stack {:?}",
+        &needles.len(),
+        &needles
+            .iter()
+            .filter(|&x| !haystack.contains(&x))
+            .cloned()
+            .collect::<Vec<_>>().len()
+    );
+}
+
 #[test]
 fn test_mcol_round_constrain() {
     use ark_curve25519::Fr as FF;
@@ -561,7 +779,7 @@ fn test_mcol_round_constrain() {
     let rng = &mut rand::thread_rng();
     let c = rng.gen::<FF>();
     let c2 = c.square();
-    let mcol_mat = mcol_round_constrain(0, 16, 0, 32, c, c2);
+
     let state = rng.gen::<[u8; 16]>();
     let key = rng.gen::<[u8; 16]>();
     let round_trace = crate::witness::trace::cipher::aes_round_trace(state, key);
@@ -569,28 +787,14 @@ fn test_mcol_round_constrain() {
     witness_u8.extend_from_slice(&round_trace.s_box);
     witness_u8.extend_from_slice(&round_trace.m_col[0]);
     witness_u8.extend_from_slice(&round_trace.m_col[1]);
+    witness_u8.extend_from_slice(&round_trace.m_col[2]);
+    witness_u8.extend_from_slice(&round_trace.m_col[3]);
+    witness_u8.extend_from_slice(&round_trace.m_col[4]);
     witness_u8 = witness_u8.iter().flat_map(|x| [x & 0xf, x >> 4]).collect();
     let witness = witness_u8.iter().map(|x| FF::from(*x)).collect::<Vec<_>>();
 
+    let mcol_mat = mcol_round_constrain(0, 16, 0, 32, c, c2);
 
-    // witness_u8.extend_from_slice(&round_trace.m_col[2]);
-    // witness_u8.extend_from_slice(&round_trace.m_col[3]);
-
-    // let witness_lo = witness_u8
-    //     .iter()
-    //     .map(|x| FF::from(*x & 0x0f))
-    //     .collect::<Vec<_>>();
-    // let witness_hi = witness_u8
-    //     .iter()
-    //     .map(|x| FF::from(*x >> 4))
-    //     .collect::<Vec<_>>();
-
-    // let needles_lo = &mcol_mat * &witness_lo;
-    // let needles_hi = &mcol_mat * &witness_hi;
-    // let needles = needles_lo
-    //     .iter()
-    //     .chain(needles_hi.iter())
-    //     .collect::<Vec<_>>();
     let needles = &mcol_mat * &witness;
     let haystack = haystack_xor(c, c2);
 
@@ -599,12 +803,12 @@ fn test_mcol_round_constrain() {
     assert!(
         needles.iter().all(|x| haystack.contains(x)),
         "Needles: {:?}, Needles not in stack {:?}",
-        &needles,
+        &needles.len(),
         &needles
             .iter()
             .filter(|&x| !haystack.contains(&x))
             .cloned()
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>().len()
     );
 }
 

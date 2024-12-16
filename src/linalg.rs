@@ -79,7 +79,7 @@ impl<F: Field> SparseMatrix<F> {
         }
     }
 
-    pub fn combine(mut self, other: SparseMatrix<F>) -> Self {
+    pub fn combine(mut self, other: SparseMatrix<F>)->Self {
         self.num_rows = self.num_rows + other.num_rows;
         self.vals.extend_from_slice(&other.vals);
         self.rows.extend_from_slice(&other.rows);
