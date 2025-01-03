@@ -259,6 +259,41 @@ pub fn ks_lin_xor_map<F: Field, const R: usize, const N: usize>(
 
 // New functions that will need to be integrated above
 
+pub fn add_final_roundkey_constrian<F: Field> ( 
+    lhs_offset: usize, 
+    rhs_offset: usize, 
+    c: F,
+) -> SparseMatrix<F> { 
+    let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+    let rows = (0..32).flat_map(|i| [i; 3]).collect::<Vec<_>>();
+    let cols = (0..16)
+        .map(|i| {
+            [
+                i + lhs_offset,
+                identity[i] as usize + rhs_offset,
+            ]
+        })
+        .flat_map(|x| {
+            [
+                x[0] * 2,
+                x[1] * 2,
+                x[0] * 2 + 1,
+                x[1] * 2 + 1,
+            ]
+        })
+        .collect::<Vec<_>>();
+    let vals = (0..32)
+        .flat_map(|_| vec![F::ONE, c])
+        .collect::<Vec<_>>();
+    return SparseMatrix {
+        num_rows: 32,
+        vals,
+        rows,
+        cols,
+    };
+}
+
 //Generic for generating constraints for XOR
 pub fn rotate_xor_contstrain<F: Field>(
     lhs_offset: usize,
@@ -343,6 +378,15 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
         add_roundkey_round_constrain::<F>(lhs_offset, rhs_offset, output_offset, c, c2)
     };
     add_roundkey_mat = add_roundkey_mat.combine_with_rowshift(initial_round);
+
+    let final_round = {
+        let offset_shift = (R-2) * 16;
+        let lhs_offset = reg.s_box+offset_shift;
+        let rhs_offset = reg.round_keys + offset_shift + 16;
+
+        add_final_roundkey_constrian::<F>(lhs_offset, rhs_offset, c)
+    };
+    add_roundkey_mat = add_roundkey_mat.combine_with_rowshift(final_round);
 
     add_roundkey_mat
 }
