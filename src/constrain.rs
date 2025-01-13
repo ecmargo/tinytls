@@ -1,3 +1,5 @@
+use std::process::Output;
+
 use crate::linalg::SparseMatrix;
 use crate::witness::trace::utils::rotate_right_inplace;
 use crate::witness::{registry, trace::utils};
@@ -9,7 +11,6 @@ pub fn aes_trace_to_needles<F: Field, const R: usize>(
     [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
 ) -> (Vec<F>, F) {
     let reg = registry::aes_offsets::<R>();
-
     let mut dst = vec![F::zero(); reg.witness_len * 2];
     let mut offset = 0;
     cipher_sbox::<F, R>(&mut dst, src, c_sbox);
@@ -259,33 +260,19 @@ pub fn ks_lin_xor_map<F: Field, const R: usize, const N: usize>(
 
 // New functions that will need to be integrated above
 
-pub fn add_final_roundkey_constrian<F: Field> ( 
-    lhs_offset: usize, 
-    rhs_offset: usize, 
+pub fn xor_constrain_no_output<F: Field>(
+    lhs_offset: usize,
+    rhs_offset: usize,
     c: F,
-) -> SparseMatrix<F> { 
+) -> SparseMatrix<F> {
     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
-    let rows = (0..32).flat_map(|i| [i; 3]).collect::<Vec<_>>();
+    let rows = (0..32).flat_map(|i| [i; 2]).collect::<Vec<_>>();
     let cols = (0..16)
-        .map(|i| {
-            [
-                i + lhs_offset,
-                identity[i] as usize + rhs_offset,
-            ]
-        })
-        .flat_map(|x| {
-            [
-                x[0] * 2,
-                x[1] * 2,
-                x[0] * 2 + 1,
-                x[1] * 2 + 1,
-            ]
-        })
+        .map(|i| [i + lhs_offset, identity[i] as usize + rhs_offset])
+        .flat_map(|x| [x[0] * 2, x[1] * 2, x[0] * 2 + 1, x[1] * 2 + 1])
         .collect::<Vec<_>>();
-    let vals = (0..32)
-        .flat_map(|_| vec![F::ONE, c])
-        .collect::<Vec<_>>();
+    let vals = (0..32).flat_map(|_| vec![F::ONE, c]).collect::<Vec<_>>();
     return SparseMatrix {
         num_rows: 32,
         vals,
@@ -337,6 +324,17 @@ pub fn rotate_xor_contstrain<F: Field>(
     };
 }
 
+//Generate lookup constraints for GCM XOR
+pub fn gcm_final_xor_block_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
+    let reg = registry::aes_gcm_block_offsets::<R>();
+    let lhs_offset = reg.aes_output;
+    let rhs_offset = reg.plain_text;
+
+    let xor_mat = xor_constrain_no_output(lhs_offset, rhs_offset, c);
+
+    xor_mat
+}
+
 //Generate constraints for a single add_roundkey
 pub fn add_roundkey_round_constrain<F: Field>(
     lhs_offset: usize,
@@ -380,15 +378,30 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
     add_roundkey_mat = add_roundkey_mat.combine_with_rowshift(initial_round);
 
     let final_round = {
-        let offset_shift = (R-2) * 16;
-        let lhs_offset = reg.s_box+offset_shift;
+        let offset_shift = (R - 2) * 16;
+        let lhs_offset = reg.s_box + offset_shift;
         let rhs_offset = reg.round_keys + offset_shift + 16;
 
-        add_final_roundkey_constrian::<F>(lhs_offset, rhs_offset, c)
+        xor_constrain_no_output::<F>(lhs_offset, rhs_offset, c)
     };
     add_roundkey_mat = add_roundkey_mat.combine_with_rowshift(final_round);
 
     add_roundkey_mat
+}
+
+pub fn constant_term_constrain<F: Field>(c2: F) -> SparseMatrix<F> {
+    let rows = (0..32).flat_map(|i| [i; 2]).collect::<Vec<_>>();
+    let cols = (0..16)
+        .map(|i| [i])
+        .flat_map(|x| [x[0] * 2, x[0] * 2 + 1])
+        .collect::<Vec<_>>();
+    let vals = (0..32).flat_map(|_| vec![c2]).collect::<Vec<_>>();
+    return SparseMatrix {
+        num_rows: 32,
+        vals,
+        rows,
+        cols,
+    };
 }
 
 //Generate constraints for a single sbox round
@@ -615,6 +628,47 @@ mod tests {
     }
 
     #[test]
+    fn test_final_xor_constrain_gcm() {
+        type F = ark_curve25519::Fr;
+
+        let rng = &mut rand::thread_rng();
+        let c: F = rng.gen();
+        let c2 = c.square();
+
+        let final_xor_mat: SparseMatrix<F> = gcm_final_xor_block_constrain::<F, 15>(c);
+        let state = rng.gen::<[u8; 16]>();
+        let key = rng.gen::<[u8; 16]>();
+        let iv: [u8; 12] = rng.gen::<[u8; 12]>();
+        let mut ctr = crate::witness::trace::gcm::AesGCMCounter::create_icb(iv);
+        ctr.count += 1;
+
+        let witness = crate::witness::gcm::AesGCMCipherBlockWitness::<F, 15, 8>::new(
+            ctr,
+            &key,
+            state,
+            F::zero(),
+            F::zero(),
+        );
+
+        let vector_witness =
+            crate::witness::gcm::AesGCMCipherBlockWitness::<F, 15, 8>::full_witness(&witness);
+        let needles = &final_xor_mat * &vector_witness;
+        let haystack = haystack_xor(c, c2);
+
+        assert!(
+            needles.iter().all(|x| haystack.contains(x)),
+            "Needles: {:?}, Needles not in stack {:?}",
+            &needles.len(),
+            &needles
+                .iter()
+                .filter(|&x| !haystack.contains(&x))
+                .cloned()
+                .collect::<Vec<_>>()
+                .len()
+        );
+    }
+
+    #[test]
     fn test_add_roundkey_constrain_aes() {
         type F = ark_curve25519::Fr;
 
@@ -711,6 +765,46 @@ mod tests {
         let sbox_mat: SparseMatrix<F> = sbox_constrain::<F, 11>(c);
 
         let needles = &sbox_mat * &vector_witness;
+        let haystack = haystack_sbox(c);
+
+        assert!(
+            needles.iter().all(|x| haystack.contains(x)),
+            "Witness: {:?}, Needles: {:?}",
+            &vector_witness,
+            &needles
+        );
+    }
+
+    #[test]
+    fn test_constant_constrain() {
+        type F = ark_curve25519::Fr;
+
+        let rng = &mut rand::thread_rng();
+        let c2 = rng.gen();
+
+        let state = rng.gen::<[u8; 16]>();
+        let key = rng.gen::<[u8; 16]>();
+
+        let witness = crate::witness::cipher::AesCipherWitness::<F, 11, 4>::new(
+            state,
+            &key,
+            F::zero(),
+            F::zero(),
+        );
+
+        let vector_witness =
+            crate::witness::cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+
+        let output = witness
+            .trace
+            .output
+            .iter()
+            .flat_map(|x| [x & 0xf, x >> 4])
+            .collect();
+
+        let constant_mat: SparseMatrix<F> = constant_term_constrain::<F>(c2);
+
+        let needles = &constant_mat * &output;
         let haystack = haystack_sbox(c);
 
         assert!(

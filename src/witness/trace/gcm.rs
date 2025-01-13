@@ -13,7 +13,7 @@ pub struct AesGCMCipherBlockTrace {
     pub plaintext: [u8; 16],
     pub counter: AesGCMCounter,
     pub aes_cipher_trace: AesCipherTrace,
-    pub final_xor: [u8; 16],
+    pub output: [u8; 16],
 }
 
 #[derive(Default, Clone)]
@@ -33,7 +33,7 @@ impl AesGCMCipherBlockTrace {
             plaintext: plain_text,
             counter: ctr,
             aes_cipher_trace: cipher_trace,
-            final_xor: xor,
+            output: xor,
         }
     }
 }
@@ -89,7 +89,7 @@ fn test_aes128_gcm_single_block() {
     ctr.count += 1;
     let block = AesGCMCipherBlockTrace::new(key, ctr, plain_text);
 
-    assert_eq!(block.final_xor, expected);
+    assert_eq!(block.output, expected);
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn test_aes128_gcm_full() {
     let mut result: Vec<u8> = Vec::new();
 
     for block in out.blocks {
-        result.extend_from_slice(&(block.final_xor));
+        result.extend_from_slice(&(block.output));
     }
 
     assert_eq!(result, check);

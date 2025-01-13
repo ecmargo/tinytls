@@ -6,7 +6,7 @@ use ark_ff::Field;
 use crate::lookup;
 use crate::traits::Witness;
 use crate::witness::cipher::AesCipherWitness;
-use crate::witness::registry::aes_gcm_block_offsets;
+use crate::witness::registry::{aes_gcm_block_offsets, aes_offsets};
 use crate::witness::trace::gcm::{self, AesGCMCipherBlockTrace, AesGCMCipherTrace, AesGCMCounter};
 use crate::MultiBlockWitness;
 
@@ -34,7 +34,7 @@ impl<F: Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F, R, N>
         key_opening: F,
         plain_text_opening: F,
     ) -> Self {
-        assert_eq!(key.len(), N * 2);
+        assert_eq!(key.len(), N * 4);
         let trace = AesGCMCipherBlockTrace::new(
             key.try_into().expect("invalid keylenght"),
             counter,
@@ -52,21 +52,30 @@ impl<F: Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F, R, N>
     }
 
     pub(crate) fn vectorize_witness(witness: &gcm::AesGCMCipherBlockTrace) -> Vec<u8> {
-        let mut w: Vec<u8> =
-            AesCipherWitness::<F, R, N>::vectorize_witness(&witness.aes_cipher_trace);
         let registry = aes_gcm_block_offsets::<R>();
-        assert_eq!(registry.final_xor, w.len());
 
-        let final_xor: Vec<u8> = witness
-            .final_xor
-            .iter()
-            .flat_map(|x: &u8| [x & 0xf, x >> 4])
-            .collect();
-        w.extend(final_xor);
-        w
+        let mut w = Vec::<u8>::new();
+
+        assert_eq!(registry.start, w.len());
+        w.extend(&witness.aes_cipher_trace.start);
+
+        assert_eq!(registry.s_box, w.len());
+        w.extend(&witness.aes_cipher_trace.s_box);
+
+        for i in 0..5 {
+            assert_eq!(registry.m_col[i], w.len());
+            w.extend(&witness.aes_cipher_trace.m_col[i]);
+        }
+        assert_eq!(registry.aes_output, w.len());
+
+        w.extend(&witness.aes_cipher_trace.output);
+        assert_eq!(registry.counter, w.len());
+
+        // split the witness and low and high 4-bits.
+        w.iter().flat_map(|x| [x & 0xf, x >> 4]).collect()
     }
 
-    //This is not the optimal way to do this,too much repeated code :(
+    //This is wrong will need to update
     fn get_xor_witness(&self) -> Vec<(u8, u8, u8)> {
         let aes_trace = &self.trace.aes_cipher_trace;
 
@@ -116,7 +125,7 @@ impl<F: Field, const R: usize, const N: usize> AesGCMCipherBlockWitness<F, R, N>
         {
             let xs = aes_trace.output.iter().copied();
             let ys = self.trace.plaintext.iter().copied();
-            let zs = self.trace.final_xor.iter().copied();
+            let zs = self.trace.output.iter().copied();
             let new_witness = xs.zip(ys).zip(zs).map(|((x, y), z)| (x, y, z));
             witness_xor.extend(new_witness);
         }
@@ -193,7 +202,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockW
 
     fn trace_to_needles_map(&self, _src: &[F], _r: [F; 4]) -> (Vec<F>, F) {
         let _aes_output = &self.trace.aes_cipher_trace.output;
-        let _final_xor = &self.trace.final_xor;
+        let _final_xor = &self.trace.output;
         let out: Vec<F> = Vec::new();
         (out, F::ZERO)
     }
@@ -236,7 +245,7 @@ fn test_compute_needles_and_freq_single_block() {
     let c_rj2 = F::rand(rng);
 
     let witness =
-        AesGCMCipherBlockWitness::<F, 15, 8>::new(ctr, &key, plain_text, F::zero(), F::zero());
+        AesGCMCipherBlockWitness::<F, 11, 4>::new(ctr, &key, plain_text, F::zero(), F::zero());
     let (needles, _freq, _freq_u64) =
         witness.compute_needles_and_frequencies([c_xor, c_xor2, c_sbox, c_rj2]);
 

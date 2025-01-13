@@ -91,8 +91,8 @@ impl<F: Field> SparseMatrix<F> {
         self.vals.extend_from_slice(&other.vals);
         self.cols.extend_from_slice(&other.cols);
 
-        let shifted: Vec<usize> = other.rows.into_iter().map(|x| x + self.num_rows).collect();
-        self.rows.extend_from_slice(&shifted);
+        let shifted_rows = other.rows.into_iter().map(|x| x + self.num_rows);
+        self.rows.extend(shifted_rows);
 
         self.num_rows = self.num_rows + other.num_rows;
 

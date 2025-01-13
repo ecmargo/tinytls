@@ -15,7 +15,7 @@ pub struct AesGCMBlockWitnessRegions {
     pub start: usize,
     pub s_box: usize,
     pub m_col: [usize; 5],
-    pub final_xor: usize,
+    pub aes_output: usize,
     pub counter: usize,
     pub plain_text: usize,
     pub witness_len: usize,
@@ -120,7 +120,7 @@ pub(crate) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
 /// ---------------+
 /// |  .m_col      |
 /// +--------------+
-/// |  .final_xor  |
+/// |  .aes_output |
 /// +--------------+
 /// |  .counter    |  <-- from outside
 /// +--------------+
@@ -142,7 +142,7 @@ pub(crate) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
 ///   `m_col[1]` up to `m_col[4]` denotes the state at the end of each xor operation.
 ///    Therefore, it has length 16 * 9 * 5 = 720.
 ///    (Note: the final AddRoundKey operation is not included involves `.start` and `.m_col[4]`)
-/// - `.final_xor`
+/// - `.aes_output`
 ///   denotes the final xor between the encrypted counter and the plain text
 ///    Therefore, it has length 16
 /// - `.counter` and `.plain_text`
@@ -161,8 +161,8 @@ pub(crate) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnes
         m_col_offset + m_col_len * 3,
         m_col_offset + m_col_len * 4,
     ];
-    let final_xor = m_col[4] + m_col_len;
-    let counter = final_xor + 16;
+    let aes_output = m_col[4] + m_col_len;
+    let counter = aes_output + 16;
     let plain_text = counter + 16;
     let needles_len =
             16 * (R-1) + // s_box
@@ -178,7 +178,7 @@ pub(crate) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnes
         start,
         s_box,
         m_col,
-        final_xor,
+        aes_output,
         counter,
         plain_text,
         witness_len: plain_text + 16,
