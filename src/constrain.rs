@@ -327,18 +327,6 @@ pub fn rotate_xor_contstrain<F: Field>(
     };
 }
 
-/// Lookup constraints for GCM XOR
-#[cfg(test)]
-pub fn gcm_final_xor_block_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
-    let reg = registry::aes_gcm_block_offsets::<R>();
-    let lhs_offset = reg.aes_output;
-    let rhs_offset = reg.plain_text;
-
-    let xor_mat = xor_constrain_no_output(lhs_offset, rhs_offset, c);
-
-    xor_mat
-}
-
 /// Constraints for a single add_roundkey
 #[cfg(test)]
 pub fn add_roundkey_round_constrain<F: Field>(
@@ -381,7 +369,8 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
         let offset_shift = (R - 2) * 16;
         let lhs_offset = reg.s_box + offset_shift;
         let rhs_offset = reg.round_keys + offset_shift + 16;
-        xor_constrain_no_output::<F>(lhs_offset, rhs_offset, c)
+        let output_offset = reg.witness_len;
+        add_roundkey_round_constrain::<F>(lhs_offset, rhs_offset, output_offset, c, c2)
     };
 
     middle_rounds
@@ -546,7 +535,7 @@ mod tests {
     use super::*;
     use crate::linalg::SparseMatrix;
     use crate::lookup::{haystack_rj2, haystack_sbox, haystack_xor};
-    use crate::witness::{cipher, gcm, trace};
+    use crate::witness::{cipher, trace};
     use crate::Witness;
 
     #[test]
@@ -588,41 +577,6 @@ mod tests {
     }
 
     #[test]
-    fn test_final_xor_constrain_gcm() {
-        type F = ark_curve25519::Fr;
-
-        let rng = &mut rand::thread_rng();
-        let c: F = rng.gen();
-        let c2 = c.square();
-
-        let final_xor_mat: SparseMatrix<F> = gcm_final_xor_block_constrain::<F, 15>(c);
-        let state = rng.gen::<[u8; 16]>();
-        let key = rng.gen::<[u8; 16]>();
-        let iv: [u8; 12] = rng.gen::<[u8; 12]>();
-        let mut ctr = trace::gcm::AesGCMCounter::create_icb(iv);
-        ctr.count += 1;
-
-        let witness =
-            gcm::AesGCMCipherBlockWitness::<F, 15, 8>::new(ctr, &key, state, F::ZERO, F::ZERO);
-
-        let vector_witness = gcm::AesGCMCipherBlockWitness::<F, 15, 8>::full_witness(&witness);
-        let needles = &final_xor_mat * &vector_witness;
-        let haystack = haystack_xor(c, c2);
-
-        assert!(
-            needles.iter().all(|x| haystack.contains(x)),
-            "Needles: {:?}, Needles not in stack {:?}",
-            &needles.len(),
-            &needles
-                .iter()
-                .filter(|&x| !haystack.contains(&x))
-                .cloned()
-                .collect::<Vec<_>>()
-                .len()
-        );
-    }
-
-    #[test]
     fn test_add_roundkey_constrain_aes() {
         type F = ark_curve25519::Fr;
 
@@ -635,8 +589,9 @@ mod tests {
         let key = rng.gen::<[u8; 16]>();
         let witness = cipher::AesCipherWitness::<F, 11, 4>::new(state, &key, F::ZERO, F::ZERO);
 
-        let vector_witness = cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
-        let needles = &add_roundkey_mat * &vector_witness;
+        let mut statement_vec = cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+        statement_vec.extend(witness.trace.output.iter().flat_map(|x| [F::from(x & 0xf), F::from(x >> 4)]));
+        let needles = &add_roundkey_mat * &statement_vec;
         let haystack = haystack_xor(c, c2);
 
         assert!(
