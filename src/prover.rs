@@ -73,7 +73,7 @@ where
         let tmp = linalg::add_constant(&f_vec, c_lup);
         linalg::hadamard(&tmp, &c_ipa_twist_vec)
     };
-    // check that the inner-product realtion is indeed correct.
+    // check that the inner-product relation is indeed correct.
     debug_assert_eq!(
         linalg::inner_product(&f_twist_vec, &q_vec),
         c_ipa_twist_vec.iter().sum::<G::ScalarField>()
