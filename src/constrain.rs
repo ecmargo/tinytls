@@ -1,3 +1,4 @@
+use crate::linalg::SparseMatrix;
 use crate::witness::{registry, trace::utils};
 use ark_ff::Field;
 
@@ -353,8 +354,6 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
     //Normal rounds
     let reg = registry::aes_offsets::<R>();
 
-    let mut add_roundkey_mat = SparseMatrix::new();
-
     let middle_rounds = (0..R - 2)
         .map(|round| {
             let offset_shift = round * 16;
@@ -368,8 +367,6 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
         .reduce(SparseMatrix::combine_with_rowshift)
         .unwrap();
 
-    add_roundkey_mat = add_roundkey_mat.combine_with_rowshift(middle_rounds);
-
     let initial_round = {
         let lhs_offset = reg.message;
         let rhs_offset = reg.round_keys;
@@ -377,8 +374,6 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
 
         add_roundkey_round_constrain::<F>(lhs_offset, rhs_offset, output_offset, c, c2)
     };
-    add_roundkey_mat = add_roundkey_mat.combine_with_rowshift(initial_round);
-
     let final_round = {
         let offset_shift = (R - 2) * 16;
         let lhs_offset = reg.s_box + offset_shift;
@@ -386,9 +381,10 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
 
         xor_constrain_no_output::<F>(lhs_offset, rhs_offset, c)
     };
-    add_roundkey_mat = add_roundkey_mat.combine_with_rowshift(final_round);
 
-    add_roundkey_mat
+    middle_rounds
+        .combine_with_rowshift(initial_round)
+        .combine_with_rowshift(final_round)
 }
 
 #[cfg(test)]
@@ -500,8 +496,6 @@ pub fn rj2_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
 pub fn mcol_constrain<F: Field, const R: usize>(c: F, c2: F) -> SparseMatrix<F> {
     let reg = registry::aes_offsets::<R>();
 
-    let mut mcol_mat = SparseMatrix::new();
-
     let mcol_mat1s: SparseMatrix<F> = (0..R - 2)
         .map(|round| {
             let offset_shift = 16 * round;
@@ -512,8 +506,6 @@ pub fn mcol_constrain<F: Field, const R: usize>(c: F, c2: F) -> SparseMatrix<F> 
         })
         .reduce(SparseMatrix::combine_with_rowshift)
         .unwrap();
-
-    mcol_mat = mcol_mat.combine(mcol_mat1s);
 
     let mcol_mat2s: SparseMatrix<F> = (0..R - 2)
         .map(|round| {
@@ -526,8 +518,6 @@ pub fn mcol_constrain<F: Field, const R: usize>(c: F, c2: F) -> SparseMatrix<F> 
         .reduce(SparseMatrix::combine_with_rowshift)
         .unwrap();
 
-    mcol_mat = mcol_mat.combine_with_rowshift(mcol_mat2s);
-
     let mcol_mat3s: SparseMatrix<F> = (0..R - 2)
         .map(|round| {
             let offset_shift = 16 * round;
@@ -538,8 +528,6 @@ pub fn mcol_constrain<F: Field, const R: usize>(c: F, c2: F) -> SparseMatrix<F> 
         })
         .reduce(SparseMatrix::combine_with_rowshift)
         .unwrap();
-
-    mcol_mat = mcol_mat.combine_with_rowshift(mcol_mat3s);
 
     let mcol_mat4s: SparseMatrix<F> = (0..R - 2)
         .map(|round| {
@@ -552,9 +540,10 @@ pub fn mcol_constrain<F: Field, const R: usize>(c: F, c2: F) -> SparseMatrix<F> 
         .reduce(SparseMatrix::combine_with_rowshift)
         .unwrap();
 
-    mcol_mat = mcol_mat.combine_with_rowshift(mcol_mat4s);
-
-    mcol_mat
+    mcol_mat1s
+        .combine_with_rowshift(mcol_mat2s)
+        .combine_with_rowshift(mcol_mat3s)
+        .combine_with_rowshift(mcol_mat4s)
 }
 
 #[cfg(test)]
