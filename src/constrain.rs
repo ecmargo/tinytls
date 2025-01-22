@@ -4,7 +4,6 @@ use ark_ff::Field;
 #[cfg(test)]
 use crate::linalg::SparseMatrix;
 
-
 pub fn aes_trace_to_needles<F: Field, const R: usize>(
     output: &[u8; 16],
     src: &[F],
@@ -428,22 +427,20 @@ pub fn sbox_round_constrain<F: Field>(
     };
 }
 
-//Generate constraints for all sbox rounds
+/// Constraints for all sbox rounds
 #[cfg(test)]
 pub fn sbox_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
     let reg = registry::aes_offsets::<R>();
-    let sbox_mat = (0..R - 1)
-        .map(|_| {
-            let input_offset = reg.start;
-            let output_offset = reg.s_box;
-            sbox_round_constrain(input_offset, output_offset, c)
-        })
+    let input_offset = reg.start;
+    let output_offset = reg.s_box;
+
+    (0..R - 1)
+        .map(|_| sbox_round_constrain(input_offset, output_offset, c))
         .reduce(SparseMatrix::combine_with_rowshift)
-        .unwrap();
-    sbox_mat
+        .unwrap()
 }
 
-//Generate constraints for a single rj2 round
+/// Generate constraints for a single rj2 round
 #[cfg(test)]
 fn rj2_round_constrain<F: Field>(
     input_offset: usize,
@@ -533,7 +530,7 @@ mod tests {
     use rand::Rng;
 
     use super::*;
-    use crate::linalg::SparseMatrix;
+    use crate::linalg::{self, SparseMatrix};
     use crate::lookup::{haystack_rj2, haystack_sbox, haystack_xor};
     use crate::witness::{cipher, trace};
     use crate::Witness;
@@ -590,7 +587,13 @@ mod tests {
         let witness = cipher::AesCipherWitness::<F, 11, 4>::new(state, &key, F::ZERO, F::ZERO);
 
         let mut statement_vec = cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
-        statement_vec.extend(witness.trace.output.iter().flat_map(|x| [F::from(x & 0xf), F::from(x >> 4)]));
+        statement_vec.extend(
+            witness
+                .trace
+                .output
+                .iter()
+                .flat_map(|x| [F::from(x & 0xf), F::from(x >> 4)]),
+        );
         let needles = &add_roundkey_mat * &statement_vec;
         let haystack = haystack_xor(c, c2);
 
@@ -650,7 +653,7 @@ mod tests {
         type F = ark_curve25519::Fr;
 
         let rng = &mut rand::thread_rng();
-        let c = rng.gen();
+        let c = F::ZERO;
 
         let message = rng.gen();
         let key = rng.gen::<[u8; 16]>();
@@ -690,13 +693,16 @@ mod tests {
 
         let sbox_mat: SparseMatrix<F> = sbox_constrain::<F, 11>(c);
 
-        let v = vec![F::ZERO; witness.needles_len()];
-        println!("{:?} {:?}", vector_witness.len(), witness.needles_len());
+        let v = linalg::powers(F::ONE, witness.needles_len());
+        println!("{:?} {:?}", vector_witness.len(), sbox_mat);
 
         let dst = (v.as_slice(), vector_witness.len()) * sbox_mat;
         let mut dst2 = vec![F::ZERO; vector_witness.len()];
         cipher_sbox::<F, 11>(&mut dst2, &v, c);
-        assert_eq!(dst[..registry::AES128REG.s_box], dst2[..registry::AES128REG.s_box]);
+        assert_eq!(
+            dst[..registry::AES128REG.s_box],
+            dst2[..registry::AES128REG.s_box]
+        );
     }
 
     #[test]
