@@ -358,7 +358,7 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
         .map(|round| {
             let offset_shift = round * 16;
             let lhs_offset = reg.m_col[4] + offset_shift;
-            //Need an initial shift in rhs nand output offset because for round i we need the i+1 round key and start
+            // Need an initial shift in rhs nand output offset because for round i we need the i+1 round key and start
             let rhs_offset = reg.round_keys + offset_shift + 16;
             let output_offset = reg.start + offset_shift + 16;
 
