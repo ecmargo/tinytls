@@ -278,7 +278,7 @@ pub fn xor_constrain_no_output<F: Field>(
     };
 }
 
-//Generic for generating constraints for XOR
+/// Constraints for XOR
 #[cfg(test)]
 pub fn rotate_xor_contstrain<F: Field>(
     lhs_offset: usize,
@@ -324,7 +324,7 @@ pub fn rotate_xor_contstrain<F: Field>(
     };
 }
 
-//Generate lookup constraints for GCM XOR
+/// Lookup constraints for GCM XOR
 #[cfg(test)]
 pub fn gcm_final_xor_block_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
     let reg = registry::aes_gcm_block_offsets::<R>();
@@ -336,7 +336,7 @@ pub fn gcm_final_xor_block_constrain<F: Field, const R: usize>(c: F) -> SparseMa
     xor_mat
 }
 
-//Generate constraints for a single add_roundkey
+/// Constraints for a single add_roundkey
 #[cfg(test)]
 pub fn add_roundkey_round_constrain<F: Field>(
     lhs_offset: usize,
@@ -351,7 +351,7 @@ pub fn add_roundkey_round_constrain<F: Field>(
 //Generate all constraints for adding round key, specific for basic AES
 #[cfg(test)]
 pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> SparseMatrix<F> {
-    //Normal rounds
+    // Normal rounds
     let reg = registry::aes_offsets::<R>();
 
     let middle_rounds = (0..R - 2)
@@ -371,14 +371,13 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
         let lhs_offset = reg.message;
         let rhs_offset = reg.round_keys;
         let output_offset = reg.start;
-
         add_roundkey_round_constrain::<F>(lhs_offset, rhs_offset, output_offset, c, c2)
     };
+
     let final_round = {
         let offset_shift = (R - 2) * 16;
         let lhs_offset = reg.s_box + offset_shift;
         let rhs_offset = reg.round_keys + offset_shift + 16;
-
         xor_constrain_no_output::<F>(lhs_offset, rhs_offset, c)
     };
 
@@ -496,54 +495,44 @@ pub fn rj2_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
 pub fn mcol_constrain<F: Field, const R: usize>(c: F, c2: F) -> SparseMatrix<F> {
     let reg = registry::aes_offsets::<R>();
 
-    let mcol_mat1s: SparseMatrix<F> = (0..R - 2)
-        .map(|round| {
-            let offset_shift = 16 * round;
-            let lhs_offset = reg.m_col[0] + offset_shift;
-            let rhs_offset = reg.s_box + offset_shift;
-            let output_offset = reg.m_col[1] + offset_shift;
-            rotate_xor_contstrain(lhs_offset, rhs_offset, output_offset, c, c2, 1)
-        })
-        .reduce(SparseMatrix::combine_with_rowshift)
-        .unwrap();
+    let mcol_mat1s = (0..R - 2).map(|round| {
+        let offset_shift = 16 * round;
+        let lhs_offset = reg.m_col[0] + offset_shift;
+        let rhs_offset = reg.s_box + offset_shift;
+        let output_offset = reg.m_col[1] + offset_shift;
+        rotate_xor_contstrain(lhs_offset, rhs_offset, output_offset, c, c2, 1)
+    });
 
-    let mcol_mat2s: SparseMatrix<F> = (0..R - 2)
-        .map(|round| {
-            let offset_shift = 16 * round;
-            let lhs_offset = reg.m_col[1] + offset_shift;
-            let rhs_offset = reg.s_box + offset_shift;
-            let output_offset = reg.m_col[2] + offset_shift;
-            rotate_xor_contstrain(lhs_offset, rhs_offset, output_offset, c, c2, 2)
-        })
-        .reduce(SparseMatrix::combine_with_rowshift)
-        .unwrap();
+    let mcol_mat2s = (0..R - 2).map(|round| {
+        let offset_shift = 16 * round;
+        let lhs_offset = reg.m_col[1] + offset_shift;
+        let rhs_offset = reg.s_box + offset_shift;
+        let output_offset = reg.m_col[2] + offset_shift;
+        rotate_xor_contstrain(lhs_offset, rhs_offset, output_offset, c, c2, 2)
+    });
 
-    let mcol_mat3s: SparseMatrix<F> = (0..R - 2)
-        .map(|round| {
-            let offset_shift = 16 * round;
-            let lhs_offset = reg.m_col[2] + offset_shift;
-            let rhs_offset = reg.s_box + offset_shift;
-            let output_offset = reg.m_col[3] + offset_shift;
-            rotate_xor_contstrain(lhs_offset, rhs_offset, output_offset, c, c2, 3)
-        })
-        .reduce(SparseMatrix::combine_with_rowshift)
-        .unwrap();
+    let mcol_mat3s = (0..R - 2).map(|round| {
+        let offset_shift = 16 * round;
+        let lhs_offset = reg.m_col[2] + offset_shift;
+        let rhs_offset = reg.s_box + offset_shift;
+        let output_offset = reg.m_col[3] + offset_shift;
+        rotate_xor_contstrain(lhs_offset, rhs_offset, output_offset, c, c2, 3)
+    });
 
-    let mcol_mat4s: SparseMatrix<F> = (0..R - 2)
-        .map(|round| {
-            let offset_shift = 16 * round;
-            let lhs_offset = reg.m_col[3] + offset_shift;
-            let rhs_offset = reg.m_col[0] + offset_shift;
-            let output_offset = reg.m_col[4] + offset_shift;
-            rotate_xor_contstrain(lhs_offset, rhs_offset, output_offset, c, c2, 3)
-        })
-        .reduce(SparseMatrix::combine_with_rowshift)
-        .unwrap();
+    let mcol_mat4s = (0..R - 2).map(|round| {
+        let offset_shift = 16 * round;
+        let lhs_offset = reg.m_col[3] + offset_shift;
+        let rhs_offset = reg.m_col[0] + offset_shift;
+        let output_offset = reg.m_col[4] + offset_shift;
+        rotate_xor_contstrain(lhs_offset, rhs_offset, output_offset, c, c2, 3)
+    });
 
     mcol_mat1s
-        .combine_with_rowshift(mcol_mat2s)
-        .combine_with_rowshift(mcol_mat3s)
-        .combine_with_rowshift(mcol_mat4s)
+        .chain(mcol_mat2s)
+        .chain(mcol_mat3s)
+        .chain(mcol_mat4s)
+        .reduce(SparseMatrix::combine_with_rowshift)
+        .unwrap()
 }
 
 #[cfg(test)]
@@ -551,45 +540,11 @@ mod tests {
     use ark_ff::{AdditiveGroup, Field};
     use rand::Rng;
 
-    use crate::linalg::SparseMatrix;
-    use crate::witness::trace::utils;
-    use crate::Witness;
-
     use super::*;
-
-    /// Return the lookup table for the AES s-box
-    fn haystack_sbox<F: Field>(c_sbox: F) -> Vec<F> {
-        (0u8..=255)
-            .map(|i| {
-                let x = i;
-                let y = utils::SBOX[x as usize];
-                F::from(x) + c_sbox * F::from(y)
-            })
-            .collect()
-    }
-
-    /// Return the lookup table for the AES rj2
-    fn haystack_rj2<F: Field>(c_rj2: F) -> Vec<F> {
-        (0u8..=255)
-            .map(|i| {
-                let x = i;
-                let y = utils::RJ2[x as usize];
-                F::from(x) + c_rj2 * F::from(y)
-            })
-            .collect()
-    }
-
-    /// Return the lookup table for the AES XOR
-    fn haystack_xor<F: Field>(c: F, c2: F) -> Vec<F> {
-        (0u8..=0xff)
-            .map(|i| {
-                let x = i & 0x0f;
-                let y = i >> 4;
-                let z = x ^ y;
-                F::from(x) + c * F::from(y) + c2 * F::from(z)
-            })
-            .collect()
-    }
+    use crate::linalg::SparseMatrix;
+    use crate::lookup::{haystack_rj2, haystack_sbox, haystack_xor};
+    use crate::witness::{cipher, gcm, trace};
+    use crate::Witness;
 
     #[test]
     fn test_add_roundkey_round_constrain() {
@@ -599,10 +554,10 @@ mod tests {
         let c: F = rng.gen();
         let c2 = c.square();
 
-        let state = rng.gen::<[u8; 16]>();
-        let key = rng.gen::<[u8; 16]>();
+        let state = rng.gen();
+        let key = rng.gen();
 
-        let round_trace = crate::witness::trace::cipher::aes_round_trace(state, key);
+        let round_trace = trace::cipher::aes_round_trace(state, key);
         let mut witness_u8: Vec<u8> = Vec::new();
         witness_u8.extend_from_slice(&round_trace.start);
         witness_u8.extend_from_slice(&round_trace.m_col[4]);
@@ -641,19 +596,13 @@ mod tests {
         let state = rng.gen::<[u8; 16]>();
         let key = rng.gen::<[u8; 16]>();
         let iv: [u8; 12] = rng.gen::<[u8; 12]>();
-        let mut ctr = crate::witness::trace::gcm::AesGCMCounter::create_icb(iv);
+        let mut ctr = trace::gcm::AesGCMCounter::create_icb(iv);
         ctr.count += 1;
 
-        let witness = crate::witness::gcm::AesGCMCipherBlockWitness::<F, 15, 8>::new(
-            ctr,
-            &key,
-            state,
-            F::ZERO,
-            F::ZERO,
-        );
+        let witness =
+            gcm::AesGCMCipherBlockWitness::<F, 15, 8>::new(ctr, &key, state, F::ZERO, F::ZERO);
 
-        let vector_witness =
-            crate::witness::gcm::AesGCMCipherBlockWitness::<F, 15, 8>::full_witness(&witness);
+        let vector_witness = gcm::AesGCMCipherBlockWitness::<F, 15, 8>::full_witness(&witness);
         let needles = &final_xor_mat * &vector_witness;
         let haystack = haystack_xor(c, c2);
 
@@ -681,15 +630,9 @@ mod tests {
         let add_roundkey_mat: SparseMatrix<F> = add_roundkey_constrain_aes::<F, 11>(c, c2);
         let state = rng.gen::<[u8; 16]>();
         let key = rng.gen::<[u8; 16]>();
-        let witness = crate::witness::cipher::AesCipherWitness::<F, 11, 4>::new(
-            state,
-            &key,
-            F::ZERO,
-            F::ZERO,
-        );
+        let witness = cipher::AesCipherWitness::<F, 11, 4>::new(state, &key, F::ZERO, F::ZERO);
 
-        let vector_witness =
-            crate::witness::cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+        let vector_witness = cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
         let needles = &add_roundkey_mat * &vector_witness;
         let haystack = haystack_xor(c, c2);
 
@@ -713,20 +656,20 @@ mod tests {
         let rng = &mut rand::thread_rng();
         let c = rng.gen();
 
-        let state = rng.gen::<[u8; 16]>();
-        let key = rng.gen::<[u8; 16]>();
+        let state = rng.gen();
+        let key = rng.gen();
 
-        let round_trace = crate::witness::trace::cipher::aes_round_trace(state, key);
-        let mut witness_u8: Vec<u8> = Vec::new();
+        let round_trace = trace::cipher::aes_round_trace(state, key);
+        let mut witness_u8 = Vec::new();
         witness_u8.extend_from_slice(&state);
         witness_u8.extend_from_slice(&round_trace.s_box);
         witness_u8 = witness_u8.iter().flat_map(|x| [x & 0xf, x >> 4]).collect();
 
         let witness = witness_u8.iter().map(|x| F::from(*x)).collect::<Vec<_>>();
 
-        //Input offeset - state (start of witness_u8)
-        //Output offset - round_trace.s_box (state + 16)
-        let sbox_mat: SparseMatrix<F> = sbox_round_constrain(0, 16, c);
+        // Input offeset - state (start of witness_u8)
+        // Output offset - round_trace.s_box (state + 16)
+        let sbox_mat = sbox_round_constrain(0, 16, c);
 
         let needles = &sbox_mat * &witness;
         let haystack = haystack_sbox(c);
@@ -751,15 +694,10 @@ mod tests {
         let rng = &mut rand::thread_rng();
         let c = rng.gen();
 
-        let state = rng.gen::<[u8; 16]>();
+        let message = rng.gen::<[u8; 16]>();
         let key = rng.gen::<[u8; 16]>();
 
-        let witness = crate::witness::cipher::AesCipherWitness::<F, 11, 4>::new(
-            state,
-            &key,
-            F::ZERO,
-            F::ZERO,
-        );
+        let witness = cipher::AesCipherWitness::<F, 11, 4>::new(message, &key, F::ZERO, F::ZERO);
 
         let vector_witness =
             crate::witness::cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
@@ -786,15 +724,8 @@ mod tests {
         let state = rng.gen::<[u8; 16]>();
         let key = rng.gen::<[u8; 16]>();
 
-        let witness = crate::witness::cipher::AesCipherWitness::<F, 11, 4>::new(
-            state,
-            &key,
-            F::ZERO,
-            F::ZERO,
-        );
-
-        let vector_witness =
-            crate::witness::cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+        let witness = cipher::AesCipherWitness::<F, 11, 4>::new(state, &key, F::ZERO, F::ZERO);
+        let vector_witness = cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
 
         // let output = witness
         //     .trace
@@ -828,15 +759,15 @@ mod tests {
         let state = rng.gen::<[u8; 16]>();
         let key = rng.gen::<[u8; 16]>();
 
-        let round_trace = crate::witness::trace::cipher::aes_round_trace(state, key);
+        let round_trace = trace::cipher::aes_round_trace(state, key);
         let mut witness_u8: Vec<u8> = Vec::new();
         witness_u8.extend_from_slice(&round_trace.s_box);
         witness_u8.extend_from_slice(&round_trace.m_col[0]);
         witness_u8 = witness_u8.iter().flat_map(|x| [x & 0xf, x >> 4]).collect();
         let witness = witness_u8.iter().map(|x| F::from(*x)).collect::<Vec<_>>();
 
-        //Input offset - round_trace.s_box (start of witness_u8)
-        //Ouput offset - round_trace.m_col[0](input + 16)
+        // Input offset - round_trace.s_box (start of witness_u8)
+        // Ouput offset - round_trace.m_col[0](input + 16)
         let rj2_mat = rj2_round_constrain(0, 16, c);
 
         let needles = &rj2_mat * &witness;

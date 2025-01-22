@@ -47,7 +47,6 @@ where
     let (s_vec, s_const) =
         instance.trace_to_needles_map(&ipa_twist_cs_vec, [c_xor, c_xor2, c_sbox, c_rj2]);
 
-    let ipa_cs_vec = linalg::tensor(&ipa_cs);
     let [c_q] = arthur.challenge_scalars().unwrap();
     let ipa_cs_c_q_vec = linalg::add_constant(&ipa_cs_vec, c_q);
 
