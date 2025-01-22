@@ -6,7 +6,7 @@ use ark_ff::Field;
 use crate::lookup;
 use crate::traits::Witness;
 use crate::witness::cipher::AesCipherWitness;
-use crate::witness::registry::{aes_gcm_block_offsets, aes_offsets};
+use crate::witness::registry::aes_gcm_block_offsets;
 use crate::witness::trace::gcm::{self, AesGCMCipherBlockTrace, AesGCMCipherTrace, AesGCMCounter};
 use crate::MultiBlockWitness;
 
