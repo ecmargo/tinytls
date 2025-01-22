@@ -679,29 +679,20 @@ mod tests {
     #[test]
     fn test_sbox_match() {
         type F = ark_curve25519::Fr;
+        let needles_len = registry::AES128REG.needles_len;
+        let witness_len = registry::AES128REG.witness_len;
 
-        let rng = &mut rand::thread_rng();
-        let c = rng.gen();
-
-        let message = rng.gen::<[u8; 16]>();
-        let key = rng.gen::<[u8; 16]>();
-
-        let witness = cipher::AesCipherWitness::<F, 11, 4>::new(message, &key, F::ZERO, F::ZERO);
-
-        let vector_witness =
-            crate::witness::cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
-
+        // let rng = &mut rand::thread_rng();
+        let c = F::ZERO;
         let sbox_mat: SparseMatrix<F> = sbox_constrain::<F, 11>(c);
+        let v = linalg::powers(F::ONE, needles_len);
 
-        let v = linalg::powers(F::ONE, witness.needles_len());
-        println!("{:?} {:?}", vector_witness.len(), sbox_mat);
-
-        let dst = (v.as_slice(), vector_witness.len()) * sbox_mat;
-        let mut dst2 = vec![F::ZERO; vector_witness.len()];
-        cipher_sbox::<F, 11>(&mut dst2, &v, c);
+        let got = (v.as_slice(), witness_len) * sbox_mat;
+        let mut expected = vec![F::ZERO; witness_len];
+        cipher_sbox::<F, 11>(&mut expected, &v, c);
         assert_eq!(
-            dst[..registry::AES128REG.s_box],
-            dst2[..registry::AES128REG.s_box]
+            expected[..registry::AES128REG.s_box],
+            got[..registry::AES128REG.s_box]
         );
     }
 
