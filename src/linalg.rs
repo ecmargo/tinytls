@@ -98,8 +98,6 @@ impl<F: Field> SparseMatrix<F> {
 
         self
     }
-
-    //make secondary combine function to not just extend the rows but also to shift, to avoid needing the row offsets
 }
 
 impl<F, J> core::ops::Mul<J> for &SparseMatrix<F>
@@ -113,6 +111,21 @@ where
         let mut result = vec![F::zero(); self.num_rows];
         for i in 0..self.rows.len() {
             result[self.rows[i]] += self.vals[i] * rhs.as_ref()[self.cols[i]];
+        }
+        result
+    }
+}
+
+
+impl<F: Field> core::ops::Mul<SparseMatrix<F>> for Vec<F>
+{
+    type Output = Vec<F>;
+
+    fn mul(self, rhs: SparseMatrix<F>) -> Self::Output {
+        let n = *rhs.cols.iter().reduce(|x, y| x.max(y)).unwrap();
+        let mut result = vec![F::zero(); n];
+        for i in 0..rhs.num_rows {
+            result[rhs.cols[i]] += rhs.vals[i] * self[rhs.rows[i]];
         }
         result
     }

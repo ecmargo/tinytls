@@ -1,6 +1,9 @@
-use crate::linalg::SparseMatrix;
 use crate::witness::{registry, trace::utils};
 use ark_ff::Field;
+
+#[cfg(test)]
+use crate::linalg::SparseMatrix;
+
 
 pub fn aes_trace_to_needles<F: Field, const R: usize>(
     output: &[u8; 16],
@@ -694,7 +697,7 @@ mod tests {
         let rng = &mut rand::thread_rng();
         let c = rng.gen();
 
-        let message = rng.gen::<[u8; 16]>();
+        let message = rng.gen();
         let key = rng.gen::<[u8; 16]>();
 
         let witness = cipher::AesCipherWitness::<F, 11, 4>::new(message, &key, F::ZERO, F::ZERO);
