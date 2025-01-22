@@ -117,15 +117,14 @@ where
 }
 
 
-impl<F: Field> core::ops::Mul<SparseMatrix<F>> for Vec<F>
+impl<F: Field> core::ops::Mul<SparseMatrix<F>> for (&[F], usize)
 {
     type Output = Vec<F>;
 
     fn mul(self, rhs: SparseMatrix<F>) -> Self::Output {
-        let n = *rhs.cols.iter().reduce(|x, y| x.max(y)).unwrap();
-        let mut result = vec![F::zero(); n];
+        let mut result = vec![F::zero(); self.1];
         for i in 0..rhs.num_rows {
-            result[rhs.cols[i]] += rhs.vals[i] * self[rhs.rows[i]];
+            result[rhs.cols[i]] += rhs.vals[i] * self.0[rhs.rows[i]];
         }
         result
     }

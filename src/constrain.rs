@@ -719,6 +719,32 @@ mod tests {
     }
 
     #[test]
+    fn test_sbox_match() {
+        type F = ark_curve25519::Fr;
+
+        let rng = &mut rand::thread_rng();
+        let c = rng.gen();
+
+        let message = rng.gen::<[u8; 16]>();
+        let key = rng.gen::<[u8; 16]>();
+
+        let witness = cipher::AesCipherWitness::<F, 11, 4>::new(message, &key, F::ZERO, F::ZERO);
+
+        let vector_witness =
+            crate::witness::cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
+
+        let sbox_mat: SparseMatrix<F> = sbox_constrain::<F, 11>(c);
+
+        let v = vec![F::ZERO; witness.needles_len()];
+        println!("{:?} {:?}", vector_witness.len(), witness.needles_len());
+
+        let dst = (v.as_slice(), vector_witness.len()) * sbox_mat;
+        let mut dst2 = vec![F::ZERO; vector_witness.len()];
+        cipher_sbox::<F, 11>(&mut dst2, &v, c);
+        assert_eq!(dst[..registry::AES128REG.s_box], dst2[..registry::AES128REG.s_box]);
+    }
+
+    #[test]
     #[ignore = "Not ready yet"]
     fn test_constant_constrain() {
         type F = ark_curve25519::Fr;
