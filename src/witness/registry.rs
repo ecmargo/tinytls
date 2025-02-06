@@ -6,6 +6,7 @@ pub struct AesWitnessRegions {
     pub message: usize,
     pub round_keys: usize,
     pub witness_len: usize,
+    // pub full_statement_len: usize, // Constants will go after witness --> so witness_len + constant constraints
     pub needles_len: usize,
 }
 
@@ -19,6 +20,7 @@ pub struct AesGCMBlockWitnessRegions {
     pub counter: usize,
     pub plain_text: usize,
     pub witness_len: usize,
+    // pub full_statement_len: usize, 
     pub needles_len: usize,
     pub full_witness_round_keys_location: usize,
 }
