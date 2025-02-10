@@ -6,7 +6,7 @@ pub struct AesWitnessRegions {
     pub message: usize,
     pub round_keys: usize,
     pub witness_len: usize,
-    // pub full_statement_len: usize, // Constants will go after witness --> so witness_len + constant constraints
+    pub full_statement_len: usize,
     pub needles_len: usize,
 }
 
@@ -55,9 +55,11 @@ pub(crate) const fn aes_keysch_offsets<const R: usize, const N: usize>() -> AesK
 /// ---------------+
 /// |  .m_col      |
 /// +--------------+
-/// |  .message    |  <-- from outside
+/// |  .message    | <-- from outside 
 /// +--------------+
 /// |  .round_keys |  <-- from outside
+/// +--------------+
+/// |  .output     |  <-- from outside
 /// +--------------+
 /// ```
 ///
@@ -77,6 +79,8 @@ pub(crate) const fn aes_keysch_offsets<const R: usize, const N: usize>() -> AesK
 ///    (Note: the final AddRoundKey operation is not included involves `.start` and `.m_col[4]`)
 /// - `.message` and `.round_keys`
 ///  denote message and round keys, respectively. They are given as part of the statement.
+/// - `.output' denote the output of the encryption
+///    Therefore it has length 16
 pub(crate) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
     let start = 0;
     let s_box = start + 16 * (R - 1);
@@ -91,9 +95,9 @@ pub(crate) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
         m_col_offset + m_col_len * 3,
         m_col_offset + m_col_len * 4,
     ];
-    // let addroundkey_len = 16 * 11;
     let message = m_col[4] + m_col_len;
     let round_keys = message + 16;
+    let output = round_keys + 16 * R; 
     let needles_len =
             16 * (R-1) + // s_box
             16 * (R-2) + // rj2
@@ -107,7 +111,8 @@ pub(crate) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
         m_col,
         message,
         round_keys,
-        witness_len: round_keys + 16 * R,
+        witness_len: output,
+        full_statement_len: output + 16,
         needles_len,
     }
 }
@@ -184,6 +189,7 @@ pub(crate) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnes
         counter,
         plain_text,
         witness_len: plain_text + 16,
+        // full_statement_len: aes_output,
         full_witness_round_keys_location: round_key_loc,
         needles_len,
     }

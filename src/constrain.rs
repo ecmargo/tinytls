@@ -259,25 +259,6 @@ pub fn ks_lin_xor_map<F: Field, const R: usize, const N: usize>(
     constant_term
 }
 
-/// Computes constraints for XOR without shift and output
-#[cfg(test)]
-pub fn xor_constrain_no_output<F: Field>(
-    lhs_offset: usize,
-    rhs_offset: usize,
-    c: F,
-) -> SparseMatrix<F> {
-    let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-
-    let rows = (0..32).flat_map(|i| [i; 2]).collect::<Vec<_>>();
-    let cols = (0..16)
-        .map(|i| [i + lhs_offset, identity[i] as usize + rhs_offset])
-        .flat_map(|x| [x[0] * 2, x[1] * 2, x[0] * 2 + 1, x[1] * 2 + 1])
-        .collect::<Vec<_>>();
-    let vals = (0..32).flat_map(|_| vec![F::ONE, c]).collect::<Vec<_>>();
-
-    SparseMatrix::new(vals, rows, cols)
-}
-
 /// Computes constraints matrix for XOR with output
 /// 
 /// Includes both an option for identity vector rotation
@@ -371,19 +352,6 @@ pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> Spar
     middle_rounds
         .combine_with_rowshift(initial_round)
         .combine_with_rowshift(final_round)
-}
-
-#[cfg(test)]
-#[allow(unused)]
-pub fn constant_term_constrain<F: Field>(c2: F) -> SparseMatrix<F> {
-    let rows = (0..32).flat_map(|i| [i; 2]).collect::<Vec<_>>();
-    let cols = (0..16)
-        .map(|i| [i])
-        .flat_map(|x| [x[0] * 2, x[0] * 2 + 1])
-        .collect::<Vec<_>>();
-    let vals = (0..32).flat_map(|_| vec![c2]).collect::<Vec<_>>();
-    
-    SparseMatrix::new(vals, rows, cols)
 }
 
 /// Generate constraints for a single sbox round
@@ -596,6 +564,29 @@ mod tests {
     }
 
     #[test]
+    fn test_addroundkey_match() {
+        type F = ark_curve25519::Fr;
+        let needles_len = registry::AES128REG.needles_len;
+        let full_statement_len = registry::AES128REG.full_statement_len;
+
+        let rng = &mut rand::thread_rng();
+        let c = rng.gen::<F>();
+        let c2 = c.square();
+        let roundkey_mat: SparseMatrix<F> = add_roundkey_constrain_aes::<F, 11>(c, c2);
+        let v = linalg::powers(F::ONE, needles_len);
+
+
+        let got = v.as_slice() * roundkey_mat;
+        let mut expected = vec![F::ZERO; full_statement_len * 2];
+        let output = [0;16];
+        let _ = cipher_addroundkey::<F, 11>(&output,&mut expected, &v, c, c2);
+        assert_eq!(
+            expected[..registry::AES128REG.round_keys * 2],
+            got[..registry::AES128REG.round_keys * 2]
+        );
+    }
+
+    #[test]
     fn test_sbox_round_constrain() {
         type F = ark_curve25519::Fr;
 
@@ -683,40 +674,6 @@ mod tests {
         assert_eq!(
             expected[..registry::AES128REG.m_col[0]*2],
             got[..registry::AES128REG.m_col[0]*2]
-        );
-    }
-
-    #[test]
-    #[ignore = "Not ready yet"]
-    fn test_constant_constrain() {
-        type F = ark_curve25519::Fr;
-
-        let rng = &mut rand::thread_rng();
-        let state = rng.gen::<[u8; 16]>();
-        let key = rng.gen::<[u8; 16]>();
-
-        let witness = cipher::AesCipherWitness::<F, 11, 4>::new(state, &key, F::ZERO, F::ZERO);
-        let vector_witness = cipher::AesCipherWitness::<F, 11, 4>::full_witness(&witness);
-
-        let output = witness
-            .trace
-            .output
-            .iter()
-            .flat_map(|x| [x & 0xf, x >> 4]).map(F::from)
-            .collect::<Vec<_>>();
-
-        let c = rng.gen::<F>();
-        // let c2 = rng.gen::<F>();
-        let constant_mat: SparseMatrix<F> = constant_term_constrain::<F>(c);
-
-        let needles = &constant_mat * &output;
-        // let needles = Vec::new();
-        let haystack = haystack_sbox(c);
-        assert!(
-            needles.iter().all(|x| haystack.contains(x)),
-            "Witness: {:?}, Needles: {:?}",
-            &vector_witness,
-            &needles
         );
     }
 
