@@ -20,7 +20,7 @@ pub struct AesGCMBlockWitnessRegions {
     pub counter: usize,
     pub plain_text: usize,
     pub witness_len: usize,
-    // pub full_statement_len: usize, 
+    // pub full_statement_len: usize,
     pub needles_len: usize,
     pub full_witness_round_keys_location: usize,
 }
@@ -55,7 +55,7 @@ pub(crate) const fn aes_keysch_offsets<const R: usize, const N: usize>() -> AesK
 /// ---------------+
 /// |  .m_col      |
 /// +--------------+
-/// |  .message    | <-- from outside 
+/// |  .message    | <-- from outside
 /// +--------------+
 /// |  .round_keys |  <-- from outside
 /// +--------------+
@@ -97,7 +97,7 @@ pub(crate) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
     ];
     let message = m_col[4] + m_col_len;
     let round_keys = message + 16;
-    let output = round_keys + 16 * R; 
+    let output = round_keys + 16 * R;
     let needles_len =
             16 * (R-1) + // s_box
             16 * (R-2) + // rj2

@@ -260,7 +260,7 @@ pub fn ks_lin_xor_map<F: Field, const R: usize, const N: usize>(
 }
 
 /// Computes constraints matrix for XOR with output
-/// 
+///
 /// Includes both an option for identity vector rotation
 #[cfg(test)]
 pub fn rotate_xor_contstrain<F: Field>(
@@ -365,7 +365,9 @@ pub fn sbox_round_constrain<F: Field>(
     let s_row = utils::shiftrows(identity);
     let high = F::from(16);
 
-    let rows = (0..16).flat_map(|i| [i + input_offset; 4]).collect::<Vec<_>>();
+    let rows = (0..16)
+        .flat_map(|i| [i + input_offset; 4])
+        .collect::<Vec<_>>();
     let cols = (0..16)
         .flat_map(|i| {
             [
@@ -385,13 +387,13 @@ pub fn sbox_round_constrain<F: Field>(
 /// Constraints for all sbox rounds
 #[cfg(test)]
 pub fn sbox_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
-    //add function to registry aes_offsets that takes in a block number and returns the regions correctly 
+    //add function to registry aes_offsets that takes in a block number and returns the regions correctly
     let reg = registry::aes_offsets::<R>();
     let input_offset = reg.start;
     let output_offset = reg.s_box;
 
     (0..R - 1)
-        .map(|i| sbox_round_constrain(input_offset + 16*i , output_offset + 16 * i, c))
+        .map(|i| sbox_round_constrain(input_offset + 16 * i, output_offset + 16 * i, c))
         .reduce(SparseMatrix::combine)
         .unwrap()
 }
@@ -412,7 +414,7 @@ fn rj2_round_constrain<F: Field>(
     let vals = (0..16)
         .flat_map(|_| vec![F::ONE, high, c, c * high])
         .collect::<Vec<_>>();
-    
+
     SparseMatrix::new(vals, rows, cols)
 }
 
@@ -420,13 +422,11 @@ fn rj2_round_constrain<F: Field>(
 #[cfg(test)]
 pub fn rj2_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
     let reg = registry::aes_offsets::<R>();
-    let input_offset = reg.s_box; 
+    let input_offset = reg.s_box;
     let output_offset = reg.m_col[0];
 
     let rj2_mat = (0..R - 2)
-        .map(|i| {
-            rj2_round_constrain(input_offset + 16*i, output_offset + 16*i, c)
-        })
+        .map(|i| rj2_round_constrain(input_offset + 16 * i, output_offset + 16 * i, c))
         .reduce(SparseMatrix::combine_with_rowshift)
         .unwrap();
     rj2_mat
@@ -575,11 +575,10 @@ mod tests {
         let roundkey_mat: SparseMatrix<F> = add_roundkey_constrain_aes::<F, 11>(c, c2);
         let v = linalg::powers(F::ONE, needles_len);
 
-
         let got = v.as_slice() * roundkey_mat;
         let mut expected = vec![F::ZERO; full_statement_len * 2];
-        let output = [0;16];
-        let _ = cipher_addroundkey::<F, 11>(&output,&mut expected, &v, c, c2);
+        let output = [0; 16];
+        let _ = cipher_addroundkey::<F, 11>(&output, &mut expected, &v, c, c2);
         assert_eq!(
             expected[..registry::AES128REG.round_keys * 2],
             got[..registry::AES128REG.round_keys * 2]
@@ -672,8 +671,8 @@ mod tests {
         let mut expected = vec![F::ZERO; witness_len];
         cipher_sbox::<F, 11>(&mut expected, &v, c);
         assert_eq!(
-            expected[..registry::AES128REG.m_col[0]*2],
-            got[..registry::AES128REG.m_col[0]*2]
+            expected[..registry::AES128REG.m_col[0] * 2],
+            got[..registry::AES128REG.m_col[0] * 2]
         );
     }
 
@@ -748,7 +747,7 @@ mod tests {
         let witness_len = registry::AES128REG.witness_len;
 
         let rng = &mut rand::thread_rng();
-        let c =rng.gen();
+        let c = rng.gen();
         let rj2_mat: SparseMatrix<F> = rj2_constrain::<F, 11>(c);
         let v = linalg::powers(F::ONE, needles_len);
 
@@ -756,8 +755,8 @@ mod tests {
         let mut expected = vec![F::ZERO; witness_len];
         cipher_rj2::<F, 11>(&mut expected, &v, c);
         assert_eq!(
-            expected[..registry::AES128REG.m_col[1]*2],
-            got[..registry::AES128REG.m_col[1]*2]
+            expected[..registry::AES128REG.m_col[1] * 2],
+            got[..registry::AES128REG.m_col[1] * 2]
         );
     }
 
@@ -812,11 +811,11 @@ mod tests {
         let v = linalg::powers(F::ONE, needles_len);
 
         let got = v.as_slice() * mcol_mat;
-        let mut expected = vec![F::ZERO; witness_len*2];
+        let mut expected = vec![F::ZERO; witness_len * 2];
         cipher_mcol::<F, 11>(&mut expected, &v, c, c2);
         assert_eq!(
-            expected[..registry::AES128REG.message*2],
-            got[..registry::AES128REG.message*2]
+            expected[..registry::AES128REG.message * 2],
+            got[..registry::AES128REG.message * 2]
         );
     }
 }

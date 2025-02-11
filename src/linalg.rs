@@ -106,12 +106,10 @@ impl<F: Field> SparseMatrix<F> {
 
     pub fn combine_with_rowshift(self, mut other: SparseMatrix<F>) -> Self {
         other.rows.iter_mut().for_each(|x| *x += self.num_rows);
-        other.num_rows = *other.rows.iter().max().unwrap()+1;
+        other.num_rows = *other.rows.iter().max().unwrap() + 1;
         self.combine(other)
     }
 }
-
-
 
 impl<F, J> core::ops::Mul<J> for &SparseMatrix<F>
 where
@@ -127,7 +125,6 @@ where
         }
         result
     }
-
 }
 
 impl<F: Field> core::ops::Mul<SparseMatrix<F>> for &[F] {
