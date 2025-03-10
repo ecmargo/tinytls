@@ -1,3 +1,5 @@
+use rand_chacha::rand_core::block;
+
 /// Regions in the AES witness, parametrized by the number of rounds.
 pub struct AesWitnessRegions {
     pub start: usize,
@@ -81,23 +83,59 @@ pub(crate) const fn aes_keysch_offsets<const R: usize, const N: usize>() -> AesK
 ///  denote message and round keys, respectively. They are given as part of the statement.
 /// - `.output' denote the output of the encryption
 ///    Therefore it has length 16
-pub(crate) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
+pub(crate) const fn aes_offsets<const R: usize>(n_blocks: usize) -> AesWitnessRegions {
     let start = 0;
-    let s_box = start + 16 * (R - 1);
+    let s_box = start + (16 * (R - 1)*n_blocks) ;
     // thank Rust for const for loops
-    let m_col_offset = s_box + 16 * (R - 1);
+    let m_col_offset = s_box + (16 * (R - 1)*n_blocks);
     let m_col_len = 16 * (R - 2);
     #[allow(clippy::all)]
     let m_col = [
         m_col_offset + m_col_len * 0,
-        m_col_offset + m_col_len * 1,
-        m_col_offset + m_col_len * 2,
-        m_col_offset + m_col_len * 3,
-        m_col_offset + m_col_len * 4,
+        m_col_offset + (m_col_len * 1 * n_blocks),
+        m_col_offset + (m_col_len * 2 * n_blocks),
+        m_col_offset + (m_col_len * 3 * n_blocks),
+        m_col_offset + (m_col_len * 4 * n_blocks),
     ];
-    let message = m_col[4] + m_col_len;
-    let round_keys = message + 16;
-    let output = round_keys + 16 * R;
+    let message = m_col[4] + (m_col_len * n_blocks);
+    let round_keys = message + (16*n_blocks);
+    let output = round_keys + (16 * R * n_blocks);
+    let needles_len =
+            (16 * (R-1) + // s_box
+            16 * (R-2) + // rj2
+            16 * (R-2) * 5 * 2 + // m_col xor's
+            16 * 2 * 2) // addroundkey first and last
+            *n_blocks
+        ;
+
+    AesWitnessRegions {
+        start,
+        s_box,
+        m_col,
+        message,
+        round_keys,
+        witness_len: output,
+        full_statement_len: output + (16*n_blocks),
+        needles_len,
+    }
+}
+
+pub(crate) const fn aes_block_offset<const R: usize>(block_id: usize, aes_regions: AesWitnessRegions) -> AesWitnessRegions {
+    let start = aes_regions.start + (16 * (R - 1) * block_id);
+    let s_box = aes_regions.s_box + (16 * (R - 1) * block_id) ;
+    // thank Rust for const for loops
+    let m_col_len = 16 * (R - 2);
+    #[allow(clippy::all)]
+    let m_col = [
+        aes_regions.m_col[0] + (m_col_len * block_id),
+        aes_regions.m_col[1] + (m_col_len * block_id),
+        aes_regions.m_col[2] + (m_col_len * block_id),
+        aes_regions.m_col[3] + (m_col_len * block_id),
+        aes_regions.m_col[4] + (m_col_len * block_id),
+    ];
+    let message = aes_regions.message  + (16*block_id);
+    let round_keys = aes_regions.round_keys + (16* R * block_id);
+    let witness_len = round_keys + (16 * R);
     let needles_len =
             16 * (R-1) + // s_box
             16 * (R-2) + // rj2
@@ -111,8 +149,8 @@ pub(crate) const fn aes_offsets<const R: usize>() -> AesWitnessRegions {
         m_col,
         message,
         round_keys,
-        witness_len: output,
-        full_statement_len: output + 16,
+        witness_len,
+        full_statement_len: witness_len + 16,
         needles_len,
     }
 }
@@ -178,7 +216,7 @@ pub(crate) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnes
             16 * 2 * 2 + // addroundkey first and last
             16 //final xor
         ;
-    let icb_region = aes_offsets::<R>();
+    let icb_region = aes_offsets::<R>(0);
     let round_key_loc = icb_region.round_keys;
 
     AesGCMBlockWitnessRegions {
@@ -195,6 +233,6 @@ pub(crate) const fn aes_gcm_block_offsets<const R: usize>() -> AesGCMBlockWitnes
     }
 }
 
-pub const AES128REG: AesWitnessRegions = aes_offsets::<11>();
-pub const AES256REG: AesWitnessRegions = aes_offsets::<15>();
+pub const AES128REG: AesWitnessRegions = aes_offsets::<11>(1);
+pub const AES256REG: AesWitnessRegions = aes_offsets::<15>(1);
 pub const AES128KSREG: AesKeySchWitnessRegions = aes_keysch_offsets::<11, 4>();

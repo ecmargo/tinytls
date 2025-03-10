@@ -136,11 +136,11 @@ impl<G: CurveGroup, const R: usize, const N: usize> Instance<G> for AeskeySchIns
 
 impl<G: CurveGroup, const R: usize, const N: usize> Instance<G> for AesCipherInstance<G, R, N> {
     fn needles_len(&self) -> usize {
-        registry::aes_offsets::<R>().needles_len
+        registry::aes_offsets::<R>(1).needles_len
     }
 
     fn witness_len(&self) -> usize {
-        registry::aes_offsets::<R>().witness_len
+        registry::aes_offsets::<R>(1).witness_len
     }
 
     fn trace_to_needles_map(

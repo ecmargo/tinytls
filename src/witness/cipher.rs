@@ -43,7 +43,7 @@ impl<F: Field, const R: usize, const N: usize> AesCipherWitness<F, R, N> {
     /// the lookup operations.
     pub(crate) fn vectorize_witness(witness: &cipher::AesCipherTrace) -> Vec<u8> {
         let mut w = Vec::<u8>::new();
-        let registry = crate::witness::registry::aes_offsets::<R>();
+        let registry = crate::witness::registry::aes_offsets::<R>(1);
 
         assert_eq!(registry.start, w.len());
         w.extend(&witness.start);
@@ -120,7 +120,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesCipherWitness<F
     }
 
     fn needles_len(&self) -> usize {
-        aes_offsets::<R>().needles_len
+        aes_offsets::<R>(1).needles_len
     }
 
     fn full_witness_opening(&self) -> F {

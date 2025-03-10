@@ -105,7 +105,7 @@ pub fn commit_message<G: CurveGroup, const R: usize>(
     ck: &CommitmentKey<G>,
     m: [u8; 16],
 ) -> (G, G::ScalarField) {
-    let m_offset = registry::aes_offsets::<R>().message;
+    let m_offset = registry::aes_offsets::<R>(1).message;
     let m = m.iter().flat_map(|x| [x & 0xf, x >> 4]).collect::<Vec<_>>();
     let message_opening = G::ScalarField::rand(csrng);
     let message_commitment =
@@ -158,7 +158,7 @@ fn commit_round_keys<G: CurveGroup, const R: usize>(
         .collect::<Vec<_>>();
 
     let key_opening = G::ScalarField::rand(csrng);
-    let round_keys_offset = registry::aes_offsets::<R>().round_keys * 2;
+    let round_keys_offset = registry::aes_offsets::<R>(1).round_keys * 2;
     let round_keys_commitment =
         umsm::u8msm::<G>(&ck.vec_G[round_keys_offset..], &kk) + ck.H * key_opening;
 

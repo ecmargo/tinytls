@@ -9,7 +9,7 @@ pub fn aes_trace_to_needles<F: Field, const R: usize>(
     src: &[F],
     [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
 ) -> (Vec<F>, F) {
-    let reg = registry::aes_offsets::<R>();
+    let reg = registry::aes_offsets::<R>(1);
     let mut dst = vec![F::ZERO; reg.witness_len * 2];
     let mut offset = 0;
     cipher_sbox::<F, R>(&mut dst, src, c_sbox);
@@ -40,7 +40,7 @@ pub fn aes_keysch_trace_to_needles<F: Field, const R: usize, const N: usize>(
 pub fn cipher_sbox<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
     let identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
     let s_row = utils::shiftrows(identity);
-    let reg = registry::aes_offsets::<R>();
+    let reg = registry::aes_offsets::<R>(1);
     // println!(" in cipher {:?},{:?}",reg.start, reg.s_box);
 
     for round in 0..R - 1 {
@@ -59,7 +59,7 @@ pub fn cipher_sbox<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
 }
 
 pub fn cipher_rj2<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
-    let reg = registry::aes_offsets::<R>();
+    let reg = registry::aes_offsets::<R>(1);
 
     for round in 0..R - 2 {
         for i in 0..16 {
@@ -76,7 +76,7 @@ pub fn cipher_rj2<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F) {
 
 pub fn cipher_mcol<F: Field, const R: usize>(dst: &mut [F], v: &[F], r: F, r2: F) {
     let identity = (0..16).collect::<Vec<_>>();
-    let registry = registry::aes_offsets::<R>();
+    let registry = registry::aes_offsets::<R>(1);
 
     let mut aux_m_col = vec![identity; 4];
     utils::rotate_right_inplace(&mut aux_m_col[0], 1);
@@ -116,7 +116,7 @@ pub fn cipher_addroundkey<F: Field, const R: usize>(
     r2: F,
 ) -> F {
     let mut constant_term = F::from(0);
-    let registry = registry::aes_offsets::<R>();
+    let registry = registry::aes_offsets::<R>(1);
 
     for round in 0..R - 2 {
         for i in 0..16 {
@@ -319,7 +319,7 @@ pub fn add_roundkey_round_constrain<F: Field>(
 #[cfg(test)]
 pub fn add_roundkey_constrain_aes<F: Field, const R: usize>(c: F, c2: F) -> SparseMatrix<F> {
     // Normal rounds
-    let reg = registry::aes_offsets::<R>();
+    let reg = registry::aes_offsets::<R>(1);
 
     let middle_rounds = (0..R - 2)
         .map(|round| {
@@ -388,7 +388,7 @@ pub fn sbox_round_constrain<F: Field>(
 #[cfg(test)]
 pub fn sbox_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
     //add function to registry aes_offsets that takes in a block number and returns the regions correctly
-    let reg = registry::aes_offsets::<R>();
+    let reg = registry::aes_offsets::<R>(1);
     let input_offset = reg.start;
     let output_offset = reg.s_box;
 
@@ -421,7 +421,7 @@ fn rj2_round_constrain<F: Field>(
 /// Generate constraints for all rj2 rounds
 #[cfg(test)]
 pub fn rj2_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
-    let reg = registry::aes_offsets::<R>();
+    let reg = registry::aes_offsets::<R>(1);
     let input_offset = reg.s_box;
     let output_offset = reg.m_col[0];
 
@@ -435,7 +435,7 @@ pub fn rj2_constrain<F: Field, const R: usize>(c: F) -> SparseMatrix<F> {
 ///Generate constraints for all rounds of mcol
 #[cfg(test)]
 pub fn mcol_constrain<F: Field, const R: usize>(c: F, c2: F) -> SparseMatrix<F> {
-    let reg = registry::aes_offsets::<R>();
+    let reg = registry::aes_offsets::<R>(1);
 
     let mcol_mat1s = (0..R - 2).map(|round| {
         let offset_shift = 16 * round;
