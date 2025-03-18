@@ -167,7 +167,7 @@ where
             - lin_s_fold * lin_Z_fold_opening * c_lin_batch_vec[1]);
     let lin_M_fold = ck.G * lin_m_fold + ck.H * lin_M_fold_opening;
     merlin.add_points(&[lin_M_fold, lin_Q_fold]).unwrap();
-    //Loose end of lookup protocol 
+    //Loose end of lookup protocol
 
     debug_assert_eq!(
         lin_sumcheck_opening,

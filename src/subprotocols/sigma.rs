@@ -3,21 +3,23 @@ use std::ops::Mul;
 use std::vec;
 
 use ark_ec::CurveGroup;
+use ark_ff::UniformRand;
 use ark_serialize::CanonicalSerialize;
 use ark_std::Zero;
-use ark_ff::UniformRand;
 use nimue::plugins::ark::*;
 use nimue::{DuplexHash, ProofError, ProofResult};
 
-#[cfg(feature="parallel")]
-use rayon::iter::{ParallelIterator, IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator};
+#[cfg(feature = "parallel")]
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
 
-use crate::utils::pedersen::{commit_hiding,CommitmentKey};
+use crate::exports::SumcheckIO;
 use crate::subprotocols::sumcheck;
 use crate::traits::MulProofIO;
 use crate::traits::{LinProof, LinProofIO};
 use crate::utils::linalg;
-use crate::exports::SumcheckIO;
+use crate::utils::pedersen::{commit_hiding, CommitmentKey};
 #[derive(Default, CanonicalSerialize)]
 pub struct SigmaProof<G: CurveGroup> {
     pub commitment: Vec<G>,
