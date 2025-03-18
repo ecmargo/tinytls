@@ -5,7 +5,7 @@ use ark_ff::Field;
 
 use super::registry::aes_offsets;
 use super::trace::{cipher, keyschedule};
-use crate::lookup;
+use crate::subprotocols::lookup;
 use crate::traits::Witness;
 
 //See about moving the round keys once to the very end instead of the very front
@@ -166,7 +166,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesCipherWitness<F
 
     fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
         let output = &self.trace.output;
-        crate::constrain::aes_trace_to_needles::<F, R>(output, src, r)
+        crate::subprotocols::constrain::aes_trace_to_needles::<F, R>(output, src, r)
     }
 
     fn full_witness(&self) -> Vec<F> {
@@ -188,7 +188,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesCipherWitness<F
 
 #[test]
 fn test_trace_to_needles_map() {
-    use crate::linalg;
+    use crate::utils::linalg;
     type F = ark_curve25519::Fr;
     use ark_std::{UniformRand, Zero};
 

@@ -1,10 +1,10 @@
 //! See Figure 8 in the paper to learn how this protocol works
 #![allow(non_snake_case)]
 
+use crate::subprotocols::{constrain, lookup};
 use crate::traits::Witness;
 use crate::witness::registry::aes_keysch_offsets;
 use crate::witness::trace::keyschedule::{self, AesKeySchTrace};
-use crate::{constrain, lookup};
 use ark_ff::Field;
 
 pub struct AesKeySchWitness<F: Field, const R: usize, const N: usize> {
@@ -140,7 +140,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesKeySchWitness<F
 
 #[test]
 fn test_linear_ks() {
-    use crate::linalg::inner_product;
+    use crate::utils::linalg::inner_product;
     use ark_curve25519::Fr as F;
     use ark_std::UniformRand;
 

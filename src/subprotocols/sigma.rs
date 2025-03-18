@@ -8,12 +8,12 @@ use ark_std::{UniformRand, Zero};
 use nimue::plugins::ark::*;
 use nimue::{DuplexHash, ProofError, ProofResult};
 
-use crate::pedersen::commit_hiding;
-use crate::pedersen::CommitmentKey;
-use crate::sumcheck;
+use crate::exports::SumcheckIO;
+use crate::subprotocols::sumcheck;
 use crate::traits::MulProofIO;
 use crate::traits::{LinProof, LinProofIO};
-use crate::{linalg, SumcheckIO};
+use crate::utils::linalg;
+use crate::utils::pedersen::{commit_hiding, CommitmentKey};
 
 #[derive(Default, CanonicalSerialize)]
 pub struct SigmaProof<G: CurveGroup> {
@@ -210,11 +210,10 @@ impl<G: CurveGroup> LinProof<G> for CompressedSigma<G> {
             .collect::<Vec<_>>();
 
         // Do a sumcheck for <x', a'G + G'> = X + Y
-        let (challenges, tensorcheck_claim) =
-            crate::sumcheck::reduce(arthur, a_vec_prime.len(), *X + Y);
+        let (challenges, tensorcheck_claim) = sumcheck::reduce(arthur, a_vec_prime.len(), *X + Y);
         let [X_folded_com]: [G; 1] = arthur.next_points().unwrap();
 
-        let challenges_vec = crate::linalg::tensor(&challenges);
+        let challenges_vec = crate::utils::linalg::tensor(&challenges);
         let aG_folded = G::msm_unchecked(&vec_aG, &challenges_vec);
 
         mul_verify(arthur, ck, X_folded_com, aG_folded, tensorcheck_claim).unwrap();
@@ -291,7 +290,7 @@ fn test_mul() {
     type G = ark_curve25519::EdwardsProjective;
 
     let rng = &mut rand::thread_rng();
-    let ck = crate::pedersen::setup::<ark_curve25519::EdwardsProjective>(rng, 3);
+    let ck = crate::utils::pedersen::setup::<ark_curve25519::EdwardsProjective>(rng, 3);
     let a = F::rand(rng);
     let b = F::rand(rng);
     let c = a * b;
@@ -316,7 +315,7 @@ fn test_mul() {
 /// Check proof that <vec_x, vec_a> = y
 #[test]
 fn test_lineval_correctness() {
-    use crate::pedersen;
+    use crate::utils::pedersen;
     type G = ark_curve25519::EdwardsProjective;
     type F = ark_curve25519::Fr;
     let rng = &mut nimue::DefaultRng::default();
@@ -348,7 +347,7 @@ fn test_lineval_correctness() {
 /// Check proof that <vec_x, vec_a> = y
 #[test]
 fn test_compressedsigma_correctness() {
-    use crate::pedersen;
+    use crate::utils::pedersen;
     type G = ark_curve25519::EdwardsProjective;
     type F = ark_curve25519::Fr;
     let rng = &mut nimue::DefaultRng::default();

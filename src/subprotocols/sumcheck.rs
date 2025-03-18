@@ -7,8 +7,8 @@ use nimue::plugins::ark::*;
 use nimue::{Arthur, DuplexHash, IOPattern, Merlin};
 use std::ops::Mul;
 
-use crate::pedersen::{self, CommitmentKey};
 use crate::traits::SumcheckIO;
+use crate::utils::pedersen::{self, CommitmentKey};
 
 pub struct Claim<A: AdditiveGroup>(pub Vec<A>, pub Vec<A>);
 
@@ -214,7 +214,7 @@ pub fn sumcheck<G: CurveGroup>(
 fn test_sumcheck() {
     type G = ark_curve25519::EdwardsProjective;
     type F = ark_curve25519::Fr;
-    use crate::linalg;
+    use crate::utils::linalg;
     use ark_std::UniformRand;
 
     let mut rng = rand::rngs::OsRng;

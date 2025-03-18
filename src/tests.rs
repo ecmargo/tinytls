@@ -1,7 +1,7 @@
 use hex_literal::hex;
 use nimue::plugins::ark::IOPattern;
 
-use crate::{pedersen, witness::registry, witness::trace::cipher, TinybearIO};
+use crate::{exports::TinybearIO, utils::pedersen, witness::registry, witness::trace::cipher};
 
 type G = ark_curve25519::EdwardsProjective;
 // type F = ark_curve25519::Fr;
@@ -19,10 +19,10 @@ fn test_aes128() {
     let ctx = cipher::aes128(message, key);
 
     let (message_commitment, message_opening) =
-        crate::commit_aes128_message(merlin.rng(), &ck, message);
+        crate::exports::commit_aes128_message(merlin.rng(), &ck, message);
     let (round_keys_commitment, round_keys_opening) =
-        crate::commit_aes128_key(merlin.rng(), &ck, &key);
-    let proof_result = crate::aes128_prove(
+        crate::exports::commit_aes128_key(merlin.rng(), &ck, &key);
+    let proof_result = crate::exports::aes128_prove(
         &mut merlin,
         &ck,
         message,
@@ -34,7 +34,7 @@ fn test_aes128() {
     let proof = &proof_result.unwrap().to_vec();
     drop(merlin);
     let mut arthur = iop.to_arthur(proof);
-    let result = crate::aes128_verify(
+    let result = crate::exports::aes128_verify(
         &mut arthur,
         &ck,
         &message_commitment,
@@ -58,8 +58,8 @@ fn test_aes128ks() {
     );
     let key = hex!("E74A8F6DE2127BC934A55891FD23690C");
 
-    let (round_keys_com, key_opening) = crate::commit_aes128_key(merlin.rng(), &ck, &key);
-    let proof_result = crate::aes128ks_prove(&mut merlin, &ck, key, key_opening);
+    let (round_keys_com, key_opening) = crate::exports::commit_aes128_key(merlin.rng(), &ck, &key);
+    let proof_result = crate::exports::aes128ks_prove(&mut merlin, &ck, key, key_opening);
     assert!(proof_result.is_ok());
 
     // The reason that this test fails that:
@@ -68,7 +68,7 @@ fn test_aes128ks() {
     // reorganizing the witness for keyschedule and the registers will fix this.
     // It will not affect the running time.
     let mut arthur = iop.to_arthur(proof_result.unwrap());
-    assert!(crate::aes128ks_verify(&mut arthur, &ck, round_keys_com).is_ok());
+    assert!(crate::exports::aes128ks_verify(&mut arthur, &ck, round_keys_com).is_ok());
 }
 
 #[test]
@@ -85,10 +85,10 @@ fn test_aes256() {
     let ctx = cipher::aes256(message, key);
 
     let (message_commitment, message_opening) =
-        crate::commit_aes256_message(merlin.rng(), &ck, message);
+        crate::exports::commit_aes256_message(merlin.rng(), &ck, message);
     let (round_keys_commitment, round_keys_opening) =
-        crate::commit_aes256_keys(merlin.rng(), &ck, &key);
-    let proof_result = crate::aes256_prove(
+        crate::exports::commit_aes256_keys(merlin.rng(), &ck, &key);
+    let proof_result = crate::exports::aes256_prove(
         &mut merlin,
         &ck,
         message,
@@ -98,7 +98,7 @@ fn test_aes256() {
     );
     assert!(proof_result.is_ok());
     let mut arthur = iop.to_arthur(proof_result.unwrap());
-    let result = crate::aes256_verify(
+    let result = crate::exports::aes256_verify(
         &mut arthur,
         &ck,
         &message_commitment,

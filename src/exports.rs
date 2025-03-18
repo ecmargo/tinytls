@@ -3,13 +3,13 @@ use ark_std::UniformRand;
 use nimue::{Arthur, Merlin, ProofResult};
 use rand::{CryptoRng, RngCore};
 
-use crate::pedersen::CommitmentKey;
-use crate::prover::aes_prove;
-use crate::sigma::{self, SigmaProof};
-use crate::verifier::{aes_verify, AesCipherInstance, AeskeySchInstance};
+use crate::proof_system::prover::aes_prove;
+use crate::proof_system::verifier::{aes_verify, AesCipherInstance, AeskeySchInstance};
+use crate::subprotocols::sigma::{self, SigmaProof};
+use crate::utils::pedersen::CommitmentKey;
 use crate::witness::cipher::AesCipherWitness;
 use crate::witness::keyschedule::AesKeySchWitness;
-use crate::{umsm, witness::registry};
+use crate::{utils::umsm, witness::registry};
 
 pub use crate::traits::*;
 
@@ -109,7 +109,7 @@ pub fn commit_message<G: CurveGroup, const R: usize>(
     let m = m.iter().flat_map(|x| [x & 0xf, x >> 4]).collect::<Vec<_>>();
     let message_opening = G::ScalarField::rand(csrng);
     let message_commitment =
-        crate::umsm::u8msm::<G>(&ck.vec_G[m_offset * 2..], &m) + ck.H * message_opening;
+        umsm::u8msm::<G>(&ck.vec_G[m_offset * 2..], &m) + ck.H * message_opening;
 
     (message_commitment, message_opening)
 }

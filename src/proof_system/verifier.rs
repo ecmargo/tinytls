@@ -5,10 +5,11 @@ use ark_ff::Field;
 use nimue::plugins::ark::{FieldChallenges, GroupReader};
 use nimue::{Arthur, ProofResult};
 
-use crate::linalg::powers;
-use crate::pedersen::CommitmentKey;
+use crate::subprotocols::{constrain, lookup, sigma, sumcheck};
 use crate::traits::{Instance, LinProof};
-use crate::{constrain, linalg, lookup, sigma, sumcheck, witness::registry};
+use crate::utils::linalg;
+use crate::utils::pedersen::CommitmentKey;
+use crate::witness::registry;
 
 pub fn aes_verify<G, LP: LinProof<G>, const R: usize>(
     arthur: &mut Arthur,
@@ -42,7 +43,7 @@ where
     sigma::mul_verify(arthur, ck, ipa_F_twist_fold, ipa_Q_fold, ipa_claim_fold).unwrap();
 
     let ipa_cs_vec = linalg::tensor(&ipa_cs);
-    let twist_vec = powers(c_ipa_twist, needles_len);
+    let twist_vec = linalg::powers(c_ipa_twist, needles_len);
     let ipa_twist_cs_vec = linalg::hadamard(&ipa_cs_vec, &twist_vec);
     let (s_vec, s_const) =
         instance.trace_to_needles_map(&ipa_twist_cs_vec, [c_xor, c_xor2, c_sbox, c_rj2]);
@@ -148,7 +149,7 @@ impl<G: CurveGroup, const R: usize, const N: usize> Instance<G> for AesCipherIns
         src: &[<G>::ScalarField],
         r: [<G>::ScalarField; 4],
     ) -> (Vec<<G>::ScalarField>, <G>::ScalarField) {
-        crate::constrain::aes_trace_to_needles::<_, R>(&self.ctx, src, r)
+        crate::subprotocols::constrain::aes_trace_to_needles::<_, R>(&self.ctx, src, r)
     }
 
     fn full_witness_com(&self, w_com: &G) -> G {

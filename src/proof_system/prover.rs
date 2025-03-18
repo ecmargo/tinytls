@@ -9,13 +9,13 @@ use ark_ff::{Field, PrimeField};
 use nimue::plugins::ark::*;
 use nimue::ProofResult;
 
-use super::{linalg, lookup, pedersen, sigma, sumcheck};
-use crate::pedersen::CommitmentKey;
+use crate::subprotocols::{lookup, sigma, sumcheck};
 use crate::traits::{LinProof, Witness};
+use crate::utils::{linalg, pedersen};
 
 pub fn aes_prove<'a, G: CurveGroup, LP: LinProof<G>, const R: usize>(
     merlin: &'a mut Merlin,
-    ck: &CommitmentKey<G>,
+    ck: &pedersen::CommitmentKey<G>,
     witness: &impl Witness<G::ScalarField>,
 ) -> ProofResult<&'a [u8]>
 where
@@ -167,6 +167,7 @@ where
             - lin_s_fold * lin_Z_fold_opening * c_lin_batch_vec[1]);
     let lin_M_fold = ck.G * lin_m_fold + ck.H * lin_M_fold_opening;
     merlin.add_points(&[lin_M_fold, lin_Q_fold]).unwrap();
+    //Loose end of lookup protocol 
 
     debug_assert_eq!(
         lin_sumcheck_opening,
@@ -217,7 +218,7 @@ where
 
 #[test]
 fn test_prove() {
-    use crate::TinybearIO;
+    use crate::exports::TinybearIO;
     use ark_ff::Zero;
     use nimue::IOPattern;
 
@@ -238,6 +239,7 @@ fn test_prove() {
     ];
     let ck = pedersen::setup::<G>(merlin.rng(), 2084);
 
-    let proof = crate::aes128_prove::<G>(&mut merlin, &ck, message, F::zero(), &key, F::zero());
+    let proof =
+        crate::exports::aes128_prove::<G>(&mut merlin, &ck, message, F::zero(), &key, F::zero());
     println!("size: {}", proof.unwrap().len());
 }

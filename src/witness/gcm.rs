@@ -3,12 +3,12 @@
 
 use ark_ff::Field;
 
-use crate::lookup;
+use crate::exports::MultiBlockWitness;
+use crate::subprotocols::lookup;
 use crate::traits::Witness;
 use crate::witness::cipher::AesCipherWitness;
 use crate::witness::registry::aes_gcm_block_offsets;
 use crate::witness::trace::gcm::{self, AesGCMCipherBlockTrace, AesGCMCipherTrace, AesGCMCounter};
-use crate::MultiBlockWitness;
 
 #[derive(Default, Clone)]
 pub struct AesGCMCipherBlockWitness<F: Field, const R: usize, const N: usize> {
@@ -222,7 +222,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockW
 
 #[test]
 fn test_compute_needles_and_freq_single_block() {
-    use crate::linalg;
+    use crate::utils::linalg;
     type F = ark_curve25519::Fr;
     use ark_std::{UniformRand, Zero};
     use hex_literal::hex;
