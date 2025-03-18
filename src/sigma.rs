@@ -4,9 +4,13 @@ use std::vec;
 
 use ark_ec::CurveGroup;
 use ark_serialize::CanonicalSerialize;
-use ark_std::{UniformRand, Zero};
+use ark_std::Zero;
+use ark_ff::UniformRand;
 use nimue::plugins::ark::*;
 use nimue::{DuplexHash, ProofError, ProofResult};
+
+#[cfg(feature="parallel")]
+use rayon::iter::{ParallelIterator, IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator};
 
 use crate::pedersen::commit_hiding;
 use crate::pedersen::CommitmentKey;
@@ -137,9 +141,9 @@ impl<G: CurveGroup> LinProof<G> for CompressedSigma<G> {
         let aG_vec_prime = ck.G.into().batch_mul(&a_vec_prime);
 
         // Compute <a' + G'>
-        let vec_aG_tmp = ark_std::cfg_iter!(aG_vec_prime)
-            .zip(G_vec_prime.iter())
-            .map(|(&aG, G_i)| (aG + G_i))
+        let vec_aG_tmp = ark_std::cfg_into_iter!(aG_vec_prime)
+            .zip(G_vec_prime)
+            .map(|(aG, G_i)| (aG + G_i))
             .collect::<Vec<G>>();
         let mut vec_aG = G::normalize_batch(&vec_aG_tmp);
 
@@ -210,8 +214,7 @@ impl<G: CurveGroup> LinProof<G> for CompressedSigma<G> {
             .collect::<Vec<_>>();
 
         // Do a sumcheck for <x', a'G + G'> = X + Y
-        let (challenges, tensorcheck_claim) =
-            crate::sumcheck::reduce(arthur, a_vec_prime.len(), *X + Y);
+        let (challenges, tensorcheck_claim) = sumcheck::reduce(arthur, a_vec_prime.len(), *X + Y);
         let [X_folded_com]: [G; 1] = arthur.next_points().unwrap();
 
         let challenges_vec = crate::linalg::tensor(&challenges);
