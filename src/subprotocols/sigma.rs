@@ -4,17 +4,20 @@ use std::vec;
 
 use ark_ec::CurveGroup;
 use ark_serialize::CanonicalSerialize;
-use ark_std::{UniformRand, Zero};
+use ark_std::Zero;
+use ark_ff::UniformRand;
 use nimue::plugins::ark::*;
 use nimue::{DuplexHash, ProofError, ProofResult};
 
-use crate::exports::SumcheckIO;
+#[cfg(feature="parallel")]
+use rayon::iter::{ParallelIterator, IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator};
+
+use crate::utils::pedersen::{commit_hiding,CommitmentKey};
 use crate::subprotocols::sumcheck;
 use crate::traits::MulProofIO;
 use crate::traits::{LinProof, LinProofIO};
 use crate::utils::linalg;
-use crate::utils::pedersen::{commit_hiding, CommitmentKey};
-
+use crate::exports::SumcheckIO;
 #[derive(Default, CanonicalSerialize)]
 pub struct SigmaProof<G: CurveGroup> {
     pub commitment: Vec<G>,
@@ -137,9 +140,9 @@ impl<G: CurveGroup> LinProof<G> for CompressedSigma<G> {
         let aG_vec_prime = ck.G.into().batch_mul(&a_vec_prime);
 
         // Compute <a' + G'>
-        let vec_aG_tmp = ark_std::cfg_iter!(aG_vec_prime)
-            .zip(G_vec_prime.iter())
-            .map(|(&aG, G_i)| (aG + G_i))
+        let vec_aG_tmp = ark_std::cfg_into_iter!(aG_vec_prime)
+            .zip(G_vec_prime)
+            .map(|(aG, G_i)| (aG + G_i))
             .collect::<Vec<G>>();
         let mut vec_aG = G::normalize_batch(&vec_aG_tmp);
 

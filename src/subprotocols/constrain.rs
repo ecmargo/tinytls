@@ -257,7 +257,7 @@ pub fn ks_lin_xor_constrain<F: Field>(
     c: F,
     c2: F,
 ) -> SparseMatrix<F> {
-    let rows = (0..4).flat_map(|j| [j; 3]).collect::<Vec<_>>();
+    let rows = (0..8).flat_map(|i| [i; 3]).collect::<Vec<_>>();
     let cols = (0..4)
         .map(|j| [lhs_offset + j, rhs_offset + j, output_offset + j])
         .flat_map(|x| {
@@ -272,7 +272,7 @@ pub fn ks_lin_xor_constrain<F: Field>(
         })
         .collect::<Vec<_>>();
 
-    let vals = (0..4).flat_map(|_| vec![F::ONE, c, c2]).collect::<Vec<_>>();
+    let vals = (0..8).flat_map(|_| vec![F::ONE, c, c2]).collect::<Vec<_>>();
 
     SparseMatrix::new(vals, rows, cols)
 }
@@ -283,33 +283,40 @@ pub fn ks_lin_xor_round_constrain<F: Field, const R: usize, const N: usize>(
 ) -> SparseMatrix<F> {
     let reg = registry::aes_keysch_offsets::<R, N>();
     let n_4 = N / 4;
+    let i = 1;
     let mat_1 = (n_4..R).map(|round| {
         let base_shift = reg.round_keys;
-        let lhs_offset = base_shift + 16 * (round - n_4) + 4;
-        let rhs_offset = base_shift + 16 * round;
-        let output_offset = base_shift + 16 * round + 4;
+        let lhs_offset = base_shift + 16 * (round - n_4) + i*4;
+        let rhs_offset = base_shift + 16 * round + (i - 1) * 4;
+        let output_offset = base_shift + 16 * round + i * 4 ;
         ks_lin_xor_constrain(lhs_offset, rhs_offset, output_offset, c, c2)
     });
+
+    let i = 2; 
     let mat_2 = (n_4..R).map(|round| {
         let base_shift = reg.round_keys;
-        let lhs_offset = base_shift + 16 * (round - n_4) + 8;
-        let rhs_offset = base_shift + 16 * round + 4;
-        let output_offset = base_shift + 16 * round + 8;
+        let lhs_offset = base_shift + 16 * (round - n_4) + i*4;
+        let rhs_offset = base_shift + 16 * round + (i - 1) * 4;
+        let output_offset = base_shift + 16 * round + i * 4 ;
         ks_lin_xor_constrain(lhs_offset, rhs_offset, output_offset, c, c2)
     });
+
+    let i = 3; 
     let mat_3 = (n_4..R).map(|round| {
         let base_shift = reg.round_keys;
-        let lhs_offset = base_shift + 16 * (round - n_4) + 12;
-        let rhs_offset = base_shift + 16 * round + 8;
-        let output_offset = base_shift + 16 * round + 12;
+        let lhs_offset = base_shift + 16 * (round - n_4) + i*4;
+        let rhs_offset = base_shift + 16 * round + (i - 1) * 4;
+        let output_offset = base_shift + 16 * round + i * 4 ;
         ks_lin_xor_constrain(lhs_offset, rhs_offset, output_offset, c, c2)
     });
+
     let mat_4 = (n_4..R).map(|round| {
-        let lhs_offset = reg.round_keys + 16 * (round - n_4);
-        let rhs_offset = reg.xor + 16 * round;
-        let output_offset = reg.round_keys + 16 * round;
+        let lhs_offset = reg.round_keys + (16 * (round - n_4));
+        let rhs_offset = reg.xor + 4 * round;
+        let output_offset = reg.round_keys + (16 * round);
         ks_lin_xor_constrain(lhs_offset, rhs_offset, output_offset, c, c2)
     });
+
     mat_1
         .chain(mat_2)
         .chain(mat_3)
@@ -711,6 +718,41 @@ mod tests {
     }
 
     #[test]
+    fn test_ks_xor_constrain() {
+        type F = ark_curve25519::Fr;
+
+        let rng = &mut rand::thread_rng();
+        let c = rng.gen::<F>();
+        let c2 = c.square();
+
+        let xor_mat = ks_lin_xor_round_constrain::<F, 11, 4>(c, c2);
+
+        let key = rng.gen::<[u8; 16]>();
+
+        let witness = crate::witness::keyschedule::AesKeySchWitness::<F, 11, 4>::new(
+            &key,
+            &F::ZERO,
+        );
+
+        let vector_witness =
+            crate::witness::keyschedule::AesKeySchWitness::<F, 11, 4>::full_witness(&witness);
+        let needles = &xor_mat * &vector_witness;
+        let haystack = haystack_xor(c, c2);
+
+        assert!(
+            needles.iter().all(|x| haystack.contains(x)),
+            "Needles: {:?}, Needles not in stack {:?}",
+            &needles.len(),
+            &needles
+                .iter()
+                .filter(|&x| !haystack.contains(&x))
+                .cloned()
+                .collect::<Vec<_>>()
+                .len()
+        );
+    }
+
+    #[test]
     fn test_ks_lin_xor_match() {
         type F = ark_curve25519::Fr;
         let needles_len = registry::AES128KSREG.needles_len;
@@ -720,20 +762,20 @@ mod tests {
         let c: F = rng.gen();
         let c2 = c.square();
 
-        let xor_mat: SparseMatrix<F> = ks_lin_xor_round_constrain::<F, 11,4>(c, c2);
-
         let v = linalg::powers(F::ONE, needles_len);
 
-        let got = v.as_slice() * xor_mat;
         let mut expected = vec![F::ZERO; witness_len*2];
 
         ks_lin_xor_map::<F, 11,4>(&mut expected, &v, [c, c2]);
 
-        // println!("{:?}",  expected[..registry::AES128KSREG.xor*2].to_vec()); 
-        // println!("{:?}", got[..registry::AES128KSREG.xor*2].to_vec()); 
+
+        let xor_mat: SparseMatrix<F> = ks_lin_xor_round_constrain::<F, 11,4>(c, c2);
+
+
+        let got = v.as_slice() * xor_mat;
         assert_eq!(
-            expected[..registry::AES128KSREG.round_keys*2],
-            got[..registry::AES128KSREG.round_keys*2]
+            expected,
+            got
         );
     }
 
