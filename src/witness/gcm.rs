@@ -200,11 +200,11 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesGCMCipherBlockW
         (needles, freq, freq_u64)
     }
 
-    fn trace_to_needles_map(&self, _src: &[F], _r: [F; 4]) -> (Vec<F>, F) {
+    fn trace_to_needles_map(&self, _src: &[F], _r: [F; 4]) -> Vec<F> {
         let _aes_output = &self.trace.aes_cipher_trace.output;
         let _final_xor = &self.trace.output;
         let out: Vec<F> = Vec::new();
-        (out, F::ZERO)
+        out
     }
 
     fn full_witness(&self) -> Vec<F> {

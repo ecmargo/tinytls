@@ -96,7 +96,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesKeySchWitness<F
 
     fn compute_needles_and_frequencies(
         &self,
-        [c_xor, c_xor2, c_sbox, _c_rj2]: [F; 4],
+        [c_sbox, _c_rj2, c_xor, c_xor2]: [F; 4],
     ) -> (Vec<F>, Vec<F>, Vec<u64>) {
         let witness_s_box = self.get_s_box_witness();
         //This will need to chang since we'll have an additional xor
@@ -113,8 +113,8 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesKeySchWitness<F
         (needles, freq, freq_u64)
     }
 
-    fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
-        constrain::aes_keysch_trace_to_needles::<F, R, N>(src, r)
+    fn trace_to_needles_map(&self, v:&[F], r: [F; 4]) -> Vec<F> {
+        constrain::aes_keysch_trace_to_needles::<F, R, N>(v, r)
     }
 
     fn full_witness(&self) -> Vec<F> {
@@ -160,8 +160,10 @@ fn test_linear_ks() {
 
     let (Az, _f, _f8) = ks.compute_needles_and_frequencies(r);
     assert_eq!(Az.len(), registry.needles_len);
+
+    // let v = crate::utils::linalg::powers(F::ONE, ks.needles_len());
     // 180 constraints
 
-    let (Av, _constant_term) = ks.trace_to_needles_map(&v, r);
+    let Av = ks.trace_to_needles_map(&v, r);
     assert_eq!(inner_product(&Az, &v), inner_product(&Av, &z));
 }

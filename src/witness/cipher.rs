@@ -1,6 +1,8 @@
 //! See Figure 8 in the paper to learn how this protocol works
 #![allow(non_snake_case)]
 
+use std::ptr::with_exposed_provenance;
+
 use ark_ff::Field;
 
 use super::registry::aes_offsets;
@@ -129,7 +131,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesCipherWitness<F
 
     fn compute_needles_and_frequencies(
         &self,
-        [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
+        [c_sbox, c_rj2, c_xor, c_xor2]: [F; 4],
     ) -> (Vec<F>, Vec<F>, Vec<u64>) {
         // Generate the witness.
         // witness_s_box = [(a, sbox(a)), (b, sbox(b)), ...]
@@ -164,9 +166,8 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesCipherWitness<F
         (needles, freq, freq_u64)
     }
 
-    fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F) {
-        let output = &self.trace.output;
-        crate::subprotocols::constrain::aes_trace_to_needles::<F, R>(output, src, r)
+    fn trace_to_needles_map(&self, v: &[F], r: [F; 4]) -> Vec<F>{
+        crate::subprotocols::constrain::aes_trace_to_needles::<F, R>(v, r)
     }
 
     fn full_witness(&self) -> Vec<F> {
@@ -231,8 +232,11 @@ fn test_trace_to_needles_map() {
         .map(F::from)
         .collect::<Vec<_>>();
 
-    let (needled_vector, constant_term) =
-        witness.trace_to_needles_map(&vector, [c_xor, c_xor2, c_sbox, c_rj2]);
-    let expected = linalg::inner_product(&needled_vector, &trace) + constant_term;
+    let v = crate::utils::linalg::powers(F::ONE, witness.needles_len());
+
+    let needled_vector =
+        witness.trace_to_needles_map(&v, [c_sbox, c_rj2, c_xor, c_xor2]);
+    let expected = linalg::inner_product(&needled_vector, &trace);
+    // + constant_term;
     assert_eq!(got, expected);
 }

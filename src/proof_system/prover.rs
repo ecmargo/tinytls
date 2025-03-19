@@ -103,8 +103,10 @@ where
     // Sumcheck for linear evaluation
     let cs_ipa_vec = linalg::tensor(&cs_ipa);
     let ipa_twist_cs_vec = linalg::hadamard(&cs_ipa_vec, &c_ipa_twist_vec);
-    let (s_vec, s_const) =
-        witness.trace_to_needles_map(&ipa_twist_cs_vec, [c_xor, c_xor2, c_sbox, c_rj2]);
+    let s_vec =
+        witness.trace_to_needles_map(&ipa_twist_cs_vec,  [c_sbox, c_rj2, c_xor, c_xor2]);
+    
+    let s_const = G::ScalarField::from(0);
     let z_vec = witness.full_witness();
     let [c_q] = merlin.challenge_scalars().unwrap();
 

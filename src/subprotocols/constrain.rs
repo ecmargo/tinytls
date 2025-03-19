@@ -2,11 +2,10 @@ use crate::utils::linalg::{powers, SparseMatrix};
 use crate::witness::{registry, trace::utils};
 use ark_ff::Field;
 
-pub fn aes_trace_to_needles_constrain<F: Field, const R: usize>(
-    needles_len: usize,
+pub fn aes_trace_to_needles<F: Field, const R: usize>(
+    v: &[F],
     [c_sbox, c_rj2, c_xor, c_xor2]: [F; 4],
 ) -> Vec<F> {
-    let v = powers(F::ONE, needles_len);
     let mut mat;
 
     let sbox_mat = sbox_constrain::<F, R>(c_sbox);
@@ -19,21 +18,20 @@ pub fn aes_trace_to_needles_constrain<F: Field, const R: usize>(
     let add_roundkey_mat = add_roundkey_constrain_aes::<F, R>(c_xor, c_xor2);
     mat = mat.combine(add_roundkey_mat);
 
-    v.as_slice() * mat
+    v * mat
 }
 
-pub fn aes_keysch_trace_to_needles_constrain<F: Field, const R: usize, const N: usize>(
-    needles_len: usize,
+pub fn aes_keysch_trace_to_needles<F: Field, const R: usize, const N: usize>(
+    v: &[F],
     [c_sbox, _c_rj2, c_xor, c_xor2]: [F; 4],
 ) -> Vec<F> {
-    let v = powers(F::ONE, needles_len);
     let mat;
 
     let sbox_mat = ks_lin_sbox_constrain::<F, R, N>(c_sbox);
     let xor_mat = ks_lin_xor_constrain::<F, R, N>(c_xor, c_xor2);
-    mat = sbox_mat.combine_with_rowshift(xor_mat);
+    mat = sbox_mat.combine(xor_mat);
 
-    v.as_slice() * mat
+    v * mat
 }
 
 pub fn ks_lin_sbox_round_constrain<F: Field, const R: usize, const N: usize>(
@@ -389,7 +387,7 @@ mod tests {
     use crate::utils::linalg::{self, SparseMatrix};
     use crate::witness::{cipher, trace};
 
-    pub fn aes_trace_to_needles<F: Field, const R: usize>(
+    pub fn aes_trace_to_needles_old<F: Field, const R: usize>(
         output: &[u8; 16],
         src: &[F],
         [c_xor, c_xor2, c_sbox, c_rj2]: [F; 4],
@@ -409,7 +407,7 @@ mod tests {
         (dst, constant_term)
     }
 
-    pub fn aes_keysch_trace_to_needles<F: Field, const R: usize, const N: usize>(
+    pub fn aes_keysch_trace_to_needles_old<F: Field, const R: usize, const N: usize>(
         src: &[F],
         [c_xor, c_xor2, c_sbox, _c_rj2]: [F; 4],
     ) -> (Vec<F>, F) {
@@ -656,14 +654,16 @@ mod tests {
         let c_xor = c_rj2.square();
         let c_xor2 = c_xor.square();
 
+        let v = powers(F::ONE, needles_len);
+
         let got =
-            aes_trace_to_needles_constrain::<F, 11>(needles_len, [c_sbox, c_rj2, c_xor, c_xor2]);
+            aes_trace_to_needles::<F, 11>(&v, [c_sbox, c_rj2, c_xor, c_xor2]);
 
         let v = linalg::powers(F::ONE, needles_len);
 
         let output = [1; 16];
         let (mut expected, _) =
-            aes_trace_to_needles::<F, 11>(&output, &v, [c_xor, c_xor2, c_sbox, c_rj2]);
+            aes_trace_to_needles_old::<F, 11>(&output, &v, [c_xor, c_xor2, c_sbox, c_rj2]);
         let addon = vec![F::ZERO; full_statement_len * 2 - expected.len()];
         expected.extend_from_slice(&addon);
 
@@ -692,7 +692,7 @@ mod tests {
     #[test]
     fn test_ks_trace_to_needles_match() {
         type F = ark_curve25519::Fr;
-        let needles_len = registry::AES128REG.needles_len;
+        let needles_len = registry::AES128KSREG.needles_len;
 
         let rng = &mut rand::thread_rng();
         let c_sbox = rng.gen::<F>();
@@ -700,15 +700,17 @@ mod tests {
         let c_xor = c_rj2.square();
         let c_xor2 = c_xor.square();
 
-        let got = aes_keysch_trace_to_needles_constrain::<F, 11, 4>(
-            needles_len,
+        let v = powers(F::ONE, needles_len);
+
+        let got = aes_keysch_trace_to_needles::<F, 11, 4>(
+            &v,
             [c_sbox, c_rj2, c_xor, c_xor2],
         );
 
         let v = linalg::powers(F::ONE, needles_len);
 
         let (expected, _) =
-            aes_keysch_trace_to_needles::<F, 11, 4>(&v, [c_xor, c_xor2, c_sbox, c_rj2]);
+            aes_keysch_trace_to_needles_old::<F, 11, 4>(&v, [c_xor, c_xor2, c_sbox, c_rj2]);
 
         assert_eq!(expected.len(), got.len());
         assert_eq!(

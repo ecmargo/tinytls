@@ -77,7 +77,7 @@ pub trait Instance<G: CurveGroup> {
         &self,
         src: &[G::ScalarField],
         r: [G::ScalarField; 4],
-    ) -> (Vec<G::ScalarField>, G::ScalarField);
+    ) -> Vec<G::ScalarField>;
 }
 
 pub trait Witness<F: Field> {
@@ -86,7 +86,7 @@ pub trait Witness<F: Field> {
     /// Compute needles and frequencies
     /// Return (needles, frequencies, frequencies_u8)
     fn compute_needles_and_frequencies(&self, r: [F; 4]) -> (Vec<F>, Vec<F>, Vec<u64>);
-    fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> (Vec<F>, F);
+    fn trace_to_needles_map(&self, src: &[F], r: [F; 4]) -> Vec<F>;
     /// The full witness, aka vector z in the scheme,
     /// is the concatenation of the public and private information.
     fn full_witness(&self) -> Vec<F>;
