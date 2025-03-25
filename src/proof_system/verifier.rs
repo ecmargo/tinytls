@@ -45,13 +45,12 @@ where
     let ipa_cs_vec = linalg::tensor(&ipa_cs);
     let twist_vec = linalg::powers(c_ipa_twist, needles_len);
     let ipa_twist_cs_vec = linalg::hadamard(&ipa_cs_vec, &twist_vec);
-    let s_vec =
-        instance.trace_to_needles_map(&ipa_twist_cs_vec,  [c_sbox, c_rj2, c_xor, c_xor2]);
+    let s_vec = instance.trace_to_needles_map(&ipa_twist_cs_vec, [c_sbox, c_rj2, c_xor, c_xor2]);
 
     let [c_q] = arthur.challenge_scalars().unwrap();
     let ipa_cs_c_q_vec = linalg::add_constant(&ipa_cs_vec, c_q);
 
-    //check 
+    //check
     let s_const = G::ScalarField::from(0);
 
     let off = s_const + c_lup * ipa_twist_cs_vec.iter().sum::<G::ScalarField>();
@@ -152,7 +151,7 @@ impl<G: CurveGroup, const R: usize, const N: usize> Instance<G> for AesCipherIns
         src: &[<G>::ScalarField],
         r: [<G>::ScalarField; 4],
     ) -> Vec<<G>::ScalarField> {
-        crate::subprotocols::constrain::aes_trace_to_needles::<_, R>(src, r) //check 
+        crate::subprotocols::constrain::aes_trace_to_needles::<_, R>(src, r) //check
     }
 
     fn full_witness_com(&self, w_com: &G) -> G {

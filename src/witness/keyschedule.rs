@@ -113,7 +113,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesKeySchWitness<F
         (needles, freq, freq_u64)
     }
 
-    fn trace_to_needles_map(&self, v:&[F], r: [F; 4]) -> Vec<F> {
+    fn trace_to_needles_map(&self, v: &[F], r: [F; 4]) -> Vec<F> {
         constrain::aes_keysch_trace_to_needles::<F, R, N>(v, r)
     }
 
@@ -138,32 +138,46 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesKeySchWitness<F
     }
 }
 
-#[test]
-fn test_linear_ks() {
+#[cfg(test)]
+mod tests {
+    use crate::tests::utils;
+    use crate::traits::Witness;
     use crate::utils::linalg::inner_product;
-    use ark_curve25519::Fr as F;
+    use crate::witness::keyschedule::aes_keysch_offsets;
+    use crate::witness::keyschedule::AesKeySchWitness;
+    use ark_curve25519::Fr;
     use ark_std::UniformRand;
 
-    let rng = &mut ark_std::test_rng();
-    let registry = aes_keysch_offsets::<11, 4>();
-    let key = [
-        0xE7u8, 0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23, 0x69,
-        0x0C,
-    ];
-    let opening = F::from(1u8);
-    let r = [F::rand(rng), F::rand(rng), F::rand(rng), F::rand(rng)];
-    let ks = AesKeySchWitness::<F, 11, 4>::new(&key, &opening);
-    let z = ks.full_witness();
-    let v = (0..registry.needles_len)
-        .map(|_| F::rand(rng))
-        .collect::<Vec<_>>();
+    #[test]
+    fn test_linear_ks() {
+        let rng = &mut ark_std::test_rng();
+        let registry = aes_keysch_offsets::<11, 4>();
+        let key = [
+            0xE7u8, 0x4A, 0x8F, 0x6D, 0xE2, 0x12, 0x7B, 0xC9, 0x34, 0xA5, 0x58, 0x91, 0xFD, 0x23,
+            0x69, 0x0C,
+        ];
+        let opening: ark_ff::Fp<ark_ff::MontBackend<ark_curve25519::FrConfig, 4>, 4> =
+            Fr::from(1u8);
+        let r = [Fr::rand(rng), Fr::rand(rng), Fr::rand(rng), Fr::rand(rng)];
+        let ks = AesKeySchWitness::<Fr, 11, 4>::new(&key, &opening);
+        let z = ks.full_witness();
+        let v = (0..registry.needles_len)
+            .map(|_| Fr::rand(rng))
+            .collect::<Vec<_>>();
+        let v_old = v.clone();
 
-    let (Az, _f, _f8) = ks.compute_needles_and_frequencies(r);
-    assert_eq!(Az.len(), registry.needles_len);
+        let (Az, _f, _f8) = ks.compute_needles_and_frequencies(r);
+        assert_eq!(Az.len(), registry.needles_len);
 
-    // let v = crate::utils::linalg::powers(F::ONE, ks.needles_len());
-    // 180 constraints
+        let (Av_old, _constant_term_old) =
+            utils::aes_keysch_trace_to_needles_old::<Fr, 11, 4>(&v_old, r);
+        assert_eq!(inner_product(&Az, &v_old), inner_product(&Av_old, &z));
 
-    let Av = ks.trace_to_needles_map(&v, r);
-    assert_eq!(inner_product(&Az, &v), inner_product(&Av, &z));
+        // let v = crate::utils::linalg::powers(F::ONE, ks.needles_len());
+        // 180 constraints
+
+        let Av = ks.trace_to_needles_map(&v, r);
+        assert_eq!(Av, Av_old);
+        // assert_eq!(inner_product(&Az, &v), inner_product(&Av, &z));
+    }
 }

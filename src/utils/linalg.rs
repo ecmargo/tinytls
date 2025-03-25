@@ -135,6 +135,9 @@ impl<F: Field> core::ops::Mul<SparseMatrix<F>> for &[F] {
         for i in 0..rhs.cols.len() {
             result[rhs.cols[i]] += rhs.vals[i] * self[rhs.rows[i]];
         }
+        println!("result[58] {:?}", result[58]);
+        println!("rhs.vals[0] {:?}", rhs.vals[0]);
+        println!("self {:?}",self[rhs.rows[0]]);
         result
     }
 }

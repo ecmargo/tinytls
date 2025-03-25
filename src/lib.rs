@@ -8,7 +8,7 @@ pub mod subprotocols;
 
 /// Unit-tests.
 #[cfg(test)]
-mod tests;
+pub mod tests;
 /// Generic models used in the proof.
 #[allow(non_snake_case)]
 mod traits;

@@ -166,7 +166,7 @@ impl<F: Field, const R: usize, const N: usize> Witness<F> for AesCipherWitness<F
         (needles, freq, freq_u64)
     }
 
-    fn trace_to_needles_map(&self, v: &[F], r: [F; 4]) -> Vec<F>{
+    fn trace_to_needles_map(&self, v: &[F], r: [F; 4]) -> Vec<F> {
         crate::subprotocols::constrain::aes_trace_to_needles::<F, R>(v, r)
     }
 
@@ -234,8 +234,7 @@ fn test_trace_to_needles_map() {
 
     let v = crate::utils::linalg::powers(F::ONE, witness.needles_len());
 
-    let needled_vector =
-        witness.trace_to_needles_map(&v, [c_sbox, c_rj2, c_xor, c_xor2]);
+    let needled_vector = witness.trace_to_needles_map(&v, [c_sbox, c_rj2, c_xor, c_xor2]);
     let expected = linalg::inner_product(&needled_vector, &trace);
     // + constant_term;
     assert_eq!(got, expected);
